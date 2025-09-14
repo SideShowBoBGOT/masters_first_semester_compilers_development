@@ -1,3 +1,5 @@
+// antlr4-parse lab_1/lab.g4 program -tree lab_1/example.txt
+
 grammar lab;
 
 WS: [ \t\r\n]+ -> skip;
