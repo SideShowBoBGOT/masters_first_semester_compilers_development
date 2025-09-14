@@ -1,3 +1,5 @@
+.antlr/
+venv/
 # Prerequisites
 *.d
 
