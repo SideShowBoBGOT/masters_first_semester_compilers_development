@@ -1,4 +1,4 @@
-grammar MiniLisp;
+grammar lab;
 
 WS: [ \t\r\n]+ -> skip;
 
