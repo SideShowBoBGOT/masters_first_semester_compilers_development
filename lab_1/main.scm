@@ -1,0 +1,10 @@
+(display "Hello World")
+(newline)
+(define (myfunc)
+    (begin
+        (define somevar 10)
+        (display somevar)
+        (display "AHAHAHAHAHA2\n")
+    )
+)
+(myfunc)
