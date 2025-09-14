@@ -1,6 +1,8 @@
 grammar MiniLisp;
 
-WS : [ \t\r\n]+ -> skip ;
+WS: [ \t\r\n]+ -> skip;
+
+TYPE: TYPE_INTEGER | TYPE_REAL | TYPE_STRING | TYPE_BOOL;
 
 TYPE_INTEGER: 'int';
 TYPE_REAL: 'real';
@@ -13,29 +15,25 @@ KEYWORD_WHILE: 'while';
 LPAREN: '(';
 RPAREN: ')';
 
-
-
-TYPE: TYPE_INTEGER | TYPE_REAL | TYPE_STRING | TYPE_BOOL;
-
-expressionFunctionCall: LPAREN ID+ RPAREN;
-
-statementVariableDeclaration: LPAREN KEYWORD_LET ID LITERAL RPAREN;
-statementIfBranch: LPAREN statement* RPAREN;
-statementIf: LPAREN KEYWORD_IF expressionFunctionCall statementIfBranch statementIfBranch RPAREN;
-
 statement
   : statementVariableDeclaration
   | statementIf
+  | statementWhile
   | expressionFunctionCall
   ;
 
+functionCallArgument: LITERAL | ID | expressionFunctionCall;
+expressionFunctionCall: LPAREN ID functionCallArgument* RPAREN;
+statementVariableDeclaration: LPAREN KEYWORD_LET ID functionCallArgument RPAREN;
+statementsList: LPAREN statement* RPAREN;
+statementIf: LPAREN KEYWORD_IF expressionFunctionCall statementsList statementsList RPAREN;
+statementWhile: LPAREN KEYWORD_WHILE expressionFunctionCall statementsList RPAREN;
+
 funcParam: LPAREN ID TYPE RPAREN;
 funcParamList: funcParam+;
-funcDef: LPAREN KEYWORD_FN ID LPAREN funcParamList? RPAREN LPAREN statement+ RPAREN RPAREN;
+funcDef: LPAREN KEYWORD_FN ID LPAREN funcParamList? RPAREN statementsList RPAREN;
 
-
-
-program: funcDef;
+program: funcDef+;
 
 LITERAL: LITERAL_BOOL | LITERAL_REAL | LITERAL_INTEGER | LITERAL_STRING;
 LITERAL_BOOL: 'true' | 'false';
@@ -43,5 +41,5 @@ LITERAL_REAL: DIGIT+ '.' DIGIT* | '.' DIGIT+;
 LITERAL_INTEGER: DIGIT+;
 LITERAL_STRING: '"' ( ~["\\\r\n] | '\\' . )* '"';
 
-ID : [a-zA-Z] [a-zA-Z0-9_]* ;
+ID : [a-zA-Z_+\-*/^<>=]+;
 fragment DIGIT : [0-9];

@@ -1,10 +1,17 @@
-(fn func ((a int) (b real) (c string)) (
-    (let d true)
-    (let e 0)
-    (if (expr) (
-        
-    ) (
-        
-    ))
+(fn otherfunc () (
+    (display (** 2 6))
+))
 
+(fn main ((a int) (b real) (c string)) (
+    (let d (concat c "Hello KPI"))
+    (if (<= 55 104) (
+        (display (concat d "I AM TRUE"))
+    ) (
+        (display (concat d "I AM FALSE"))
+    ))
+    (let i 0)
+    (while (le i 5) (
+        (display (* 2 (- a (/ i b))))
+        (set i (+ i 1))
+    ))
 ))
