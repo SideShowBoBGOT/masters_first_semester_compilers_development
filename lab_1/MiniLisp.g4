@@ -13,14 +13,27 @@ KEYWORD_WHILE: 'while';
 LPAREN: '(';
 RPAREN: ')';
 
-statementType: TYPE_INTEGER | TYPE_REAL | TYPE_STRING | TYPE_BOOL;
+
+
+TYPE: TYPE_INTEGER | TYPE_REAL | TYPE_STRING | TYPE_BOOL;
+
+expressionFunctionCall: LPAREN ID+ RPAREN;
+
 statementVariableDeclaration: LPAREN KEYWORD_LET ID LITERAL RPAREN;
+statementIfBranch: LPAREN statement* RPAREN;
+statementIf: LPAREN KEYWORD_IF expressionFunctionCall statementIfBranch statementIfBranch RPAREN;
 
-statement: statementVariableDeclaration;
+statement
+  : statementVariableDeclaration
+  | statementIf
+  | expressionFunctionCall
+  ;
 
-funcParam: LPAREN ID statementType RPAREN;
+funcParam: LPAREN ID TYPE RPAREN;
 funcParamList: funcParam+;
 funcDef: LPAREN KEYWORD_FN ID LPAREN funcParamList? RPAREN LPAREN statement+ RPAREN RPAREN;
+
+
 
 program: funcDef;
 
