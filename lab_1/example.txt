@@ -4,7 +4,8 @@
 
 (fn main ((a int) (b real) (c string)) (
     (let d (concat c "Hello KPI"))
-    (if (<= 55 104) (
+    (let dd true)
+    (if (== 55 104) (
         (display (concat d "I AM TRUE"))
     ) (
         (display (concat d "I AM FALSE"))

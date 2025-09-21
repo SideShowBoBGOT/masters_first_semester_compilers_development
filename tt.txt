@@ -1,0 +1,19 @@
+a^n b^m| n,m = 1,…
+ab
+aab
+aaaaab
+aaabbbbb
+abbbbbb
+
+1) C -> AB
+2) A -> aA
+3) A -> є
+4) B -> bB
+5) B -> є
+
+C => (1) AB => (2) aAB => (3) aєB = aB
+=> (4) abB => (5) abє = ab
+
+C => (1) AB => (2) aAB => (2) aaAB
+=> (3) aaєB = aaB
+=> (4) aabB => (5) aabє = aab

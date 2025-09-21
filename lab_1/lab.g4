@@ -39,8 +39,8 @@ program: funcDef+;
 
 LITERAL: LITERAL_BOOL | LITERAL_REAL | LITERAL_INTEGER | LITERAL_STRING;
 LITERAL_BOOL: 'true' | 'false';
-LITERAL_REAL: DIGIT+ '.' DIGIT* | '.' DIGIT+;
-LITERAL_INTEGER: DIGIT+;
+LITERAL_REAL: ('+'|'-')?DIGIT+ '.' DIGIT+;
+LITERAL_INTEGER: ('+'|'-')?DIGIT+;
 LITERAL_STRING: '"' ( ~["\\\r\n] | '\\' . )* '"';
 
 ID : [a-zA-Z_+\-*/^<>=]+;
