@@ -67,6 +67,22 @@ typedef enum {
     TOKEN_TYPE_IDENTIFIER,
 } TokenType;
 
+static const char* token_type_str(const TokenType type) {
+    #define DEFINE_CASE(val) case val: return STRINGIFY(val)
+        switch(type) {
+            DEFINE_CASE(TOKEN_TYPE_STRING);
+            DEFINE_CASE(TOKEN_TYPE_LPAREN);
+            DEFINE_CASE(TOKEN_TYPE_RPAREN);
+            DEFINE_CASE(TOKEN_TYPE_INTEGER);
+            DEFINE_CASE(TOKEN_TYPE_FLOAT);
+            DEFINE_CASE(TOKEN_TYPE_IDENTIFIER);
+            default: {
+                ASSERT(false);
+            }
+        }
+    #undef DEFINE_CASE
+}
+
 typedef struct {
     size_t start;
     size_t end;
@@ -183,9 +199,9 @@ static void analyze_lexic(const size_t count, const char *const data) {
     Token token = {0};
     size_t index = 0;
     while(lexer_yield(count, data, &index, &token)) {
-        size_t token_len = token.end - token.start + 1;
+        const size_t token_len = token.end - token.start + 1;
         ASSERT_EXT(token_len <= INT_MAX, "token.end: %lu, token.start: %lu", token.end, token.start);
-        printf("%.*s\n", (int)token_len, data + token.start);
+        printf("value: %.*s, type: %s\n", (int)token_len, data + token.start, token_type_str(token.type));
     }
     
 }
