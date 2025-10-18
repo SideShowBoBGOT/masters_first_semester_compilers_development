@@ -10,6 +10,7 @@
 #include <fcntl.h>
 #include <unistd.h>
 #include <stdbool.h>
+#include <limits.h>
 
 #define STRINGIFY(...) #__VA_ARGS__
 
@@ -57,17 +58,13 @@
         fprintf(stderr, "]\n");\
     } while(0)
 
-
-typedef struct {
-    size_t index;
-    size_t count;
-    const char* data;
-} Lexer;
-
 typedef enum {
     TOKEN_TYPE_STRING,
     TOKEN_TYPE_LPAREN,
     TOKEN_TYPE_RPAREN,
+    TOKEN_TYPE_INTEGER,
+    TOKEN_TYPE_FLOAT,
+    TOKEN_TYPE_IDENTIFIER,
 } TokenType;
 
 typedef struct {
@@ -94,64 +91,50 @@ static bool is_valid_character(const char c) {
         || c <= 126; 
 }
 
-static bool lexer_yield(Lexer *const lexer, Token *const token) {
+static bool lexer_yield(const size_t count, const char *const data, size_t *const index, Token *const token) {
     enum {
         LEXER_STATE_NONE,
         LEXER_STATE_STRING,
         LEXER_STATE_INTEGER,
         LEXER_STATE_IDENTIFIER,
         LEXER_STATE_FLOAT,
-    } lexer_state = {0};
-    typedef union {
-        struct {
-            size_t start;
-        } string;
-        struct {
-            size_t start;
-        } integer;
-        struct {
-            size_t start;
-        } identifier;
-    } lexer_state_data = {0};
-    for(; lexer->index < lexer->count; ++lexer->index) {
-        const char c = lexer->data[i];
+    } lexer_state = LEXER_STATE_NONE;
+
+    for(; *index < count; ++*index) {
+        const char c = data[*index];
         ASSERT(is_valid_character(c));
-        switch(lexer->state) {
+        switch(lexer_state) {
             case LEXER_STATE_NONE: {
                 if(is_whitespace(c)) {
                 } else if(c == '(') {
-                    token->start = lexer->index;
-                    token->end = lexer->index;
+                    token->start = *index;
+                    token->end = *index;
                     token->type = TOKEN_TYPE_LPAREN;
-                    ++lexer->index;
-                    return true;
+                    goto emit_token;
                 } else if(c == ')') {
-                    token->start = lexer->index;
-                    token->end = lexer->index;
+                    token->start = *index;
+                    token->end = *index;
                     token->type = TOKEN_TYPE_RPAREN;
-                    ++lexer->index;
-                    return true;
+                    goto emit_token;
                 } else if(c == '"') {
-                    lexer->state = LEXER_STATE_STRING;
-                    lexer->state_data.string.start = lexer->index;
-                } else if(is_digit(lexer->data[i])) {
-                    lexer->state = LEXER_STATE_INTEGER;
-                    lexer->state_data.integer.start = lexer->index;
+                    lexer_state = LEXER_STATE_STRING;
+                    token->type = TOKEN_TYPE_STRING;
+                    token->start = *index;
+                } else if(is_digit(c)) {
+                    lexer_state = LEXER_STATE_INTEGER;
+                    token->type = TOKEN_TYPE_INTEGER;
+                    token->start = *index;
                 } else {
-                    lexer->state = LEXER_STATE_IDENTIFIER;
-                    lexer->state_data.identifier.start = lexer->index;
+                    lexer_state = LEXER_STATE_IDENTIFIER;
+                    token->type = TOKEN_TYPE_IDENTIFIER;
+                    token->start = *index;
                 }
                 break;
             }
             case LEXER_STATE_STRING: {
-                switch(lexer->data[i]) {
+                switch(c) {
                     case '"': {
-                        lexer->state = LEXER_STATE_NONE;
-                        token->start = lexer->state_data.string.start;
-                        token->end = lexer->index;
-                        token->type = TOKEN_TYPE_STRING;
-                        ++lexer->index;
-                        return true;
+                        goto emit_token;
                     }
                     default: {
                         break;
@@ -162,23 +145,52 @@ static bool lexer_yield(Lexer *const lexer, Token *const token) {
             case LEXER_STATE_INTEGER: {
                 if(is_digit(c)) {
                 } else if(is_whitespace(c)) {
-                    lexer->state = LEXER_STATE_NONE;
-
+                    token->end = *index - 1;
+                    goto emit_token;
+                } else if(c == '.') {
+                    lexer_state = LEXER_STATE_FLOAT;
+                    token->type = TOKEN_TYPE_FLOAT;
                 } else {
                     ASSERT(false);
                 }
                 break;
             }
+            case LEXER_STATE_FLOAT: {
+                if(is_digit(c)) {
+                } else if(is_whitespace(c)) {
+                    token->end = *index - 1;
+                    goto emit_token;
+                } else {
+                    ASSERT(false);
+                }
+                break;
+            }
+            case LEXER_STATE_IDENTIFIER: {
+                if(is_whitespace(c)) {
+                    token->end = *index - 1;
+                    goto emit_token;
+                }
+                break;
+            }
+            default: {
+                ASSERT(false);
+            }
         }
     }
     return false;
+    emit_token:
+        ++*index;
+        return true;
 }
 
 static void analyze_lexic(const size_t count, const char *const data) {
-    size_t token_start = 0;
-    size_t token_end = 0;
-    bool token_processed = false;
-
+    Token token = {0};
+    size_t index = 0;
+    while(lexer_yield(count, data, &index, &token)) {
+        size_t token_len = token.end - token.start + 1;
+        ASSERT(token_len <= INT_MAX);
+        printf("%.*s\n", (int)token_len, data + token.start);
+    }
     
 }
 
@@ -188,9 +200,11 @@ int main(const int argc, const char *argv[]) {
     ASSERT_NOT_MINUS_ONE(fd);
     struct stat stat;
     ASSERT_NOT_MINUS_ONE(fstat(fd, &stat));
-    char *const mapped_file = mmap(NULL, (size_t)stat.st_size, PROT_READ, MAP_SHARED, fd, 0); 
+    char *const data = mmap(NULL, (size_t)stat.st_size, PROT_READ, MAP_SHARED, fd, 0); 
+
+    analyze_lexic((size_t)stat.st_size, data);
     
 
-    ASSERT_NOT_MINUS_ONE(munmap(mapped_file, (size_t)stat.st_size));
+    ASSERT_NOT_MINUS_ONE(munmap(data, (size_t)stat.st_size));
     ASSERT_NOT_MINUS_ONE(close(fd));
 }
