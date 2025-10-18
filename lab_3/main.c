@@ -102,7 +102,7 @@ static bool lexer_yield(const size_t count, const char *const data, size_t *cons
 
     for(; *index < count; ++*index) {
         const char c = data[*index];
-        ASSERT(is_valid_character(c));
+        ASSERT_EXT(is_valid_character(c), "c: %c", c);
         switch(lexer_state) {
             case LEXER_STATE_NONE: {
                 if(is_whitespace(c)) {
@@ -132,48 +132,44 @@ static bool lexer_yield(const size_t count, const char *const data, size_t *cons
                 break;
             }
             case LEXER_STATE_STRING: {
-                switch(c) {
-                    case '"': {
-                        goto emit_token;
-                    }
-                    default: {
-                        break;
-                    }
+                if(c == '"') {
+                    token->end = *index;
+                    goto emit_token;
                 }
                 break;
             }
             case LEXER_STATE_INTEGER: {
                 if(is_digit(c)) {
-                } else if(is_whitespace(c)) {
+                } else if(is_whitespace(c) || c == ')') {
                     token->end = *index - 1;
                     goto emit_token;
                 } else if(c == '.') {
                     lexer_state = LEXER_STATE_FLOAT;
                     token->type = TOKEN_TYPE_FLOAT;
                 } else {
-                    ASSERT(false);
+                    ASSERT_EXT(false, "c: %c", c);
                 }
                 break;
             }
             case LEXER_STATE_FLOAT: {
                 if(is_digit(c)) {
-                } else if(is_whitespace(c)) {
+                } else if(is_whitespace(c) || c == ')') {
                     token->end = *index - 1;
                     goto emit_token;
                 } else {
-                    ASSERT(false);
+                    ASSERT_EXT(false, "c: %c", c);
                 }
                 break;
             }
             case LEXER_STATE_IDENTIFIER: {
-                if(is_whitespace(c)) {
+                if(is_whitespace(c) || c == ')') {
                     token->end = *index - 1;
                     goto emit_token;
                 }
                 break;
             }
             default: {
-                ASSERT(false);
+                ASSERT_EXT(false, "c: %c", c);
             }
         }
     }
@@ -188,7 +184,7 @@ static void analyze_lexic(const size_t count, const char *const data) {
     size_t index = 0;
     while(lexer_yield(count, data, &index, &token)) {
         size_t token_len = token.end - token.start + 1;
-        ASSERT(token_len <= INT_MAX);
+        ASSERT_EXT(token_len <= INT_MAX, "token.end: %lu, token.start: %lu", token.end, token.start);
         printf("%.*s\n", (int)token_len, data + token.start);
     }
     
