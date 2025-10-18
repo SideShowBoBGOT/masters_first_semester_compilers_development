@@ -1,0 +1,63 @@
+@startuml
+skinparam state {
+  BackgroundColor Snow
+  BorderColor Black
+  ArrowColor Black
+}
+[*] --> S0
+
+state S0 : start / skip WS
+S0 --> LPAREN_ACC : '('
+S0 --> RPAREN_ACC : ')'
+S0 --> S_STR : '"'
+S0 --> S_ID : [A-Za-z_ + - * / ^ < > =]
+S0 --> S_NUM_SIGN : '+' or '-' (peek DIGIT ?)
+S0 --> S_NUM_INT : DIGIT
+S0 --> S0 : WS
+S0 --> ERROR : other / invalid
+
+state S_ID : ID (first char in [A-Za-z_+\-*/^<>=])
+S_ID --> S_ID : [A-Za-z0-9_+\-*/^<>=]
+S_ID --> ID_ACC : other (unget)
+
+state S_NUM_SIGN : sign seen, next is DIGIT
+S_NUM_SIGN --> S_NUM_INT : DIGIT
+
+state S_NUM_INT : integer part
+S_NUM_INT --> S_NUM_INT : DIGIT
+S_NUM_INT --> S_NUM_DOT : '.'
+S_NUM_INT --> INT_ACC : other (unget)
+
+state S_NUM_DOT : dot after digits
+S_NUM_DOT --> S_NUM_REAL : DIGIT
+S_NUM_DOT --> ERROR : other
+
+state S_NUM_REAL : fractional digits
+S_NUM_REAL --> S_NUM_REAL : DIGIT
+S_NUM_REAL --> REAL_ACC : other (unget)
+
+state S_STR : inside string
+S_STR --> S_STR_ESC : '\\'
+S_STR --> STR_ACC : '"'
+S_STR --> S_STR : any char except [" \r \n \\]
+S_STR --> ERROR : EOL/EOF before closing quote
+
+state S_STR_ESC : after backslash
+S_STR_ESC --> S_STR : any char
+
+state LPAREN_ACC : accept LPAREN
+LPAREN_ACC --> S0
+state RPAREN_ACC : accept RPAREN
+RPAREN_ACC --> S0
+state ID_ACC : accept ID/keyword/type/bool
+ID_ACC --> S0
+state INT_ACC : accept LITERAL_INTEGER
+INT_ACC --> S0
+state REAL_ACC : accept LITERAL_REAL
+REAL_ACC --> S0
+state STR_ACC : accept LITERAL_STRING
+STR_ACC --> S0
+
+state ERROR : report with line/col and stop
+@enduml
+

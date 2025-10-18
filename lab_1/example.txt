@@ -1,11 +1,11 @@
 (fn otherfunc () (
     (display (** 2 6))
 ))
-
 (fn main ((a int) (b real) (c string)) (
     (let d (concat c "Hello KPI"))
     (let dd true)
     (if (== 55 104) (
+        (let d 33)
         (display (concat d "I AM TRUE"))
     ) (
         (display (concat d "I AM FALSE"))
@@ -16,3 +16,4 @@
         (set i (+ i 1))
     ))
 ))
+
