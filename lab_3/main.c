@@ -1,6 +1,7 @@
 #ifndef _GNU_SOURCE
 #define _GNU_SOURCE
 #endif
+#include <inttypes.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <sys/mman.h>
@@ -11,7 +12,8 @@
 #include <unistd.h>
 #include <stdbool.h>
 #include <limits.h>
-
+#include <regex.h>
+#include <time.h>
 #define STRINGIFY(...) #__VA_ARGS__
 
 #define ARRAY_COUNT(arr) (sizeof((arr)) / sizeof((arr)[0]))
@@ -59,23 +61,25 @@
     } while(0)
 
 typedef enum {
-    TOKEN_TYPE_STRING,
+    TOKEN_TYPE_IDENTIFIER,
+    TOKEN_TYPE_BOOLEAN,
     TOKEN_TYPE_LPAREN,
     TOKEN_TYPE_RPAREN,
     TOKEN_TYPE_INTEGER,
     TOKEN_TYPE_FLOAT,
-    TOKEN_TYPE_IDENTIFIER,
+    TOKEN_TYPE_STRING,
 } TokenType;
 
 static const char* token_type_str(const TokenType type) {
     #define DEFINE_CASE(val) case val: return STRINGIFY(val)
         switch(type) {
-            DEFINE_CASE(TOKEN_TYPE_STRING);
+            DEFINE_CASE(TOKEN_TYPE_IDENTIFIER);
+            DEFINE_CASE(TOKEN_TYPE_BOOLEAN);
             DEFINE_CASE(TOKEN_TYPE_LPAREN);
             DEFINE_CASE(TOKEN_TYPE_RPAREN);
             DEFINE_CASE(TOKEN_TYPE_INTEGER);
             DEFINE_CASE(TOKEN_TYPE_FLOAT);
-            DEFINE_CASE(TOKEN_TYPE_IDENTIFIER);
+            DEFINE_CASE(TOKEN_TYPE_STRING);
             default: {
                 ASSERT(false);
             }
@@ -83,14 +87,16 @@ static const char* token_type_str(const TokenType type) {
     #undef DEFINE_CASE
 }
 
+
+
 typedef struct {
-    size_t start;
-    size_t end;
+    regoff_t start;
+    regoff_t end;
     TokenType type;
 } Token;
 
 static bool is_digit(const char c) {
-    return c >= 48 && c <= 57;
+    return c >= '0' && c <= '9';
 }
 
 static bool is_whitespace(const char c) {
@@ -101,109 +107,54 @@ static bool is_whitespace(const char c) {
 
 static bool is_valid_character(const char c) {
     return is_whitespace(c)
-        || c == '('
-        || c == ')'
         || c >= 32
         || c <= 126; 
 }
 
-static bool lexer_yield(const size_t count, const char *const data, size_t *const index, Token *const token) {
-    enum {
-        LEXER_STATE_NONE,
-        LEXER_STATE_STRING,
-        LEXER_STATE_INTEGER,
-        LEXER_STATE_IDENTIFIER,
-        LEXER_STATE_FLOAT,
-    } lexer_state = LEXER_STATE_NONE;
-
-    for(; *index < count; ++*index) {
-        const char c = data[*index];
-        ASSERT_EXT(is_valid_character(c), "c: %c", c);
-        switch(lexer_state) {
-            case LEXER_STATE_NONE: {
-                if(is_whitespace(c)) {
-                } else if(c == '(') {
-                    token->start = *index;
-                    token->end = *index;
-                    token->type = TOKEN_TYPE_LPAREN;
-                    goto emit_token;
-                } else if(c == ')') {
-                    token->start = *index;
-                    token->end = *index;
-                    token->type = TOKEN_TYPE_RPAREN;
-                    goto emit_token;
-                } else if(c == '"') {
-                    lexer_state = LEXER_STATE_STRING;
-                    token->type = TOKEN_TYPE_STRING;
-                    token->start = *index;
-                } else if(is_digit(c)) {
-                    lexer_state = LEXER_STATE_INTEGER;
-                    token->type = TOKEN_TYPE_INTEGER;
-                    token->start = *index;
-                } else {
-                    lexer_state = LEXER_STATE_IDENTIFIER;
-                    token->type = TOKEN_TYPE_IDENTIFIER;
-                    token->start = *index;
-                }
-                break;
-            }
-            case LEXER_STATE_STRING: {
-                if(c == '"') {
-                    token->end = *index;
-                    goto emit_token;
-                }
-                break;
-            }
-            case LEXER_STATE_INTEGER: {
-                if(is_digit(c)) {
-                } else if(is_whitespace(c) || c == ')') {
-                    token->end = *index - 1;
-                    goto emit_token;
-                } else if(c == '.') {
-                    lexer_state = LEXER_STATE_FLOAT;
-                    token->type = TOKEN_TYPE_FLOAT;
-                } else {
-                    ASSERT_EXT(false, "c: %c", c);
-                }
-                break;
-            }
-            case LEXER_STATE_FLOAT: {
-                if(is_digit(c)) {
-                } else if(is_whitespace(c) || c == ')') {
-                    token->end = *index - 1;
-                    goto emit_token;
-                } else {
-                    ASSERT_EXT(false, "c: %c", c);
-                }
-                break;
-            }
-            case LEXER_STATE_IDENTIFIER: {
-                if(is_whitespace(c) || c == ')') {
-                    token->end = *index - 1;
-                    goto emit_token;
-                }
-                break;
-            }
-            default: {
-                ASSERT_EXT(false, "c: %c", c);
+static bool lexer_yield(regex_t *const regex, regoff_t *const offset, const char* const str, Token *const token) {
+    regmatch_t regmatch[7 + 1]= {0};
+    if(regexec(regex, str + *offset, ARRAY_COUNT(regmatch), regmatch, 0) != REG_NOMATCH) {
+        *offset += regmatch[0].rm_eo;
+        int8_t index = -1;
+        for(int8_t i = 1; i < (int8_t)ARRAY_COUNT(regmatch); ++i) {
+            if(regmatch[i].rm_so != -1 && regmatch[i].rm_eo != -1) {
+                ASSERT(index == -1);
+                index = i;
             }
         }
-    }
-    return false;
-    emit_token:
-        ++*index;
         return true;
+    } else {
+        ASSERT(*offset == (regoff_t)strlen(str) - 1);
+        return false;   
+    }
 }
 
-static void analyze_lexic(const size_t count, const char *const data) {
-    Token token = {0};
-    size_t index = 0;
-    while(lexer_yield(count, data, &index, &token)) {
-        const size_t token_len = token.end - token.start + 1;
-        ASSERT_EXT(token_len <= INT_MAX, "token.end: %lu, token.start: %lu", token.end, token.start);
-        printf("value: %.*s, type: %s\n", (int)token_len, data + token.start, token_type_str(token.type));
+static void analyze_lexic(const char *const str) {
+    static const char* lexer_patterns[] = {
+        [TOKEN_TYPE_IDENTIFIER] = "([a-zA-Z!$%&*/:<=>?^_~][a-zA-Z!$%&*/:<=>?^_~0-9]*)|[+]|[-]",
+        [TOKEN_TYPE_BOOLEAN] = "true|false",
+        [TOKEN_TYPE_LPAREN] = "(",
+        [TOKEN_TYPE_RPAREN] = ")",
+        [TOKEN_TYPE_INTEGER] = "[+-]?[0-9]+",
+        [TOKEN_TYPE_FLOAT] = "[+-]?[0-9]+[.][0-9]+",
+        [TOKEN_TYPE_STRING] = "\"[^\"]\"",
+    };
+    size_t total_len = 0;
+    for(uint8_t i = 0; i < ARRAY_COUNT(lexer_patterns); ++i) {
+        total_len += strlen(lexer_patterns[i]);
     }
+    total_len += ARRAY_COUNT(lexer_patterns) - 1;
+
+    Token token = {0};
+    regex_t regex;
+    ASSERT(regcomp(&regex, "([(])|([)])|(true)|(false)|()|()|()", REG_EXTENDED) == 0);
+    regoff_t offset = 0;
+    while(lexer_yield(&regex, &offset, str)) {
+
+    }
+
     
+    LOG_DEBUG("len: %lu, offset: %d", len, offset);
 }
 
 int main(const int argc, const char *argv[]) {
@@ -212,11 +163,11 @@ int main(const int argc, const char *argv[]) {
     ASSERT_NOT_MINUS_ONE(fd);
     struct stat stat;
     ASSERT_NOT_MINUS_ONE(fstat(fd, &stat));
-    char *const data = mmap(NULL, (size_t)stat.st_size, PROT_READ, MAP_SHARED, fd, 0); 
-
-    analyze_lexic((size_t)stat.st_size, data);
-    
-
-    ASSERT_NOT_MINUS_ONE(munmap(data, (size_t)stat.st_size));
+    char *const data = malloc((size_t)stat.st_size + 1);
+    ASSERT(data != NULL);
+    ASSERT(read(fd, data, (size_t)stat.st_size) == stat.st_size);
+    data[stat.st_size] = 0;
     ASSERT_NOT_MINUS_ONE(close(fd));
+    analyze_lexic(data);
+    free(data);
 }
