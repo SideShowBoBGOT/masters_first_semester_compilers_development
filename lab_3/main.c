@@ -68,6 +68,7 @@ typedef enum {
     TOKEN_TYPE_INTEGER,
     TOKEN_TYPE_FLOAT,
     TOKEN_TYPE_STRING,
+    TOKEN_TYPE_COUNT,
 } TokenType;
 
 static const char* token_type_str(const TokenType type) {
@@ -80,6 +81,7 @@ static const char* token_type_str(const TokenType type) {
             DEFINE_CASE(TOKEN_TYPE_INTEGER);
             DEFINE_CASE(TOKEN_TYPE_FLOAT);
             DEFINE_CASE(TOKEN_TYPE_STRING);
+            DEFINE_CASE(TOKEN_TYPE_COUNT);
             default: {
                 ASSERT(false);
             }
@@ -87,74 +89,52 @@ static const char* token_type_str(const TokenType type) {
     #undef DEFINE_CASE
 }
 
-
-
 typedef struct {
     regoff_t start;
     regoff_t end;
     TokenType type;
 } Token;
 
-static bool is_digit(const char c) {
-    return c >= '0' && c <= '9';
-}
-
-static bool is_whitespace(const char c) {
-    return c == ' '
-        || c == '\n'
-        || c == '\t';
-}
-
-static bool is_valid_character(const char c) {
-    return is_whitespace(c)
-        || c >= 32
-        || c <= 126; 
-}
-
-static bool lexer_yield(regex_t *const regex, regoff_t *const offset, const char* const str, Token *const token) {
-    regmatch_t regmatch[7 + 1]= {0};
-    if(regexec(regex, str + *offset, ARRAY_COUNT(regmatch), regmatch, 0) != REG_NOMATCH) {
-        *offset += regmatch[0].rm_eo;
-        int8_t index = -1;
-        for(int8_t i = 1; i < (int8_t)ARRAY_COUNT(regmatch); ++i) {
+static void analyze_lexic(const char *const str) {
+    regex_t regex;
+    static const char regstring[] = "^((\n)|[ \t]+|([a-zA-Z!$%&*/:<=>?^_~][a-zA-Z!$%&*/:<=>?^_~0-9]*|[+]|[-])|(true|false)|([(])|([)])|([+-]?[0-9]+)|([+-]?[0-9]+[.][0-9]+)|(\"[^\"]*\"))";
+    LOG_DEBUG("%s", regstring);
+    ASSERT(regcomp(&regex, regstring, REG_EXTENDED) == 0);
+    regoff_t offset = 0;
+    enum {
+        group_offset =
+            + 1 // for global match
+            + 1 // for outer group
+            + 1 // for newline group
+    };
+    regmatch_t regmatch[(int)TOKEN_TYPE_COUNT + (int)group_offset] = {0};
+    regoff_t newline_index = 0;
+    regoff_t newline_offset = 0;
+    while(regexec(&regex, str + offset, ARRAY_COUNT(regmatch), regmatch, 0) != REG_NOMATCH) {
+        // for debug puposes i want to be sure that token matches only for a single group
+        bool group_found = false;
+        if(regmatch[2].rm_so != -1 && regmatch[2].rm_eo != -1) {
+            ASSERT(group_found == false);
+            group_found = true;
+            // const int token_len = regmatch[2].rm_eo - regmatch[2].rm_so;
+            // printf("NEWLINE %.*s", token_len, str + offset + regmatch[2].rm_so);
+            newline_index += 1;
+            newline_offset = offset + regmatch[0].rm_eo;
+        }
+        for(int8_t i = group_offset; i < (int8_t)ARRAY_COUNT(regmatch); ++i) {
             if(regmatch[i].rm_so != -1 && regmatch[i].rm_eo != -1) {
-                ASSERT(index == -1);
-                index = i;
+                ASSERT(group_found == false);
+                group_found = true;
+                const int token_len = regmatch[i].rm_eo - regmatch[i].rm_so;
+                LOG_DEBUG("%.*s, %s", token_len, str + offset + regmatch[i].rm_so, token_type_str((TokenType)i - (int)group_offset));
             }
         }
-        return true;
-    } else {
-        ASSERT(*offset == (regoff_t)strlen(str) - 1);
-        return false;   
+        offset += regmatch[0].rm_eo;
     }
-}
-
-static void analyze_lexic(const char *const str) {
-    static const char* lexer_patterns[] = {
-        [TOKEN_TYPE_IDENTIFIER] = "([a-zA-Z!$%&*/:<=>?^_~][a-zA-Z!$%&*/:<=>?^_~0-9]*)|[+]|[-]",
-        [TOKEN_TYPE_BOOLEAN] = "true|false",
-        [TOKEN_TYPE_LPAREN] = "(",
-        [TOKEN_TYPE_RPAREN] = ")",
-        [TOKEN_TYPE_INTEGER] = "[+-]?[0-9]+",
-        [TOKEN_TYPE_FLOAT] = "[+-]?[0-9]+[.][0-9]+",
-        [TOKEN_TYPE_STRING] = "\"[^\"]\"",
-    };
-    size_t total_len = 0;
-    for(uint8_t i = 0; i < ARRAY_COUNT(lexer_patterns); ++i) {
-        total_len += strlen(lexer_patterns[i]);
+    if(offset != (regoff_t)strlen(str)) {
+        LOG_DEBUG("unrecognized input at %d:%d", newline_index, offset - newline_offset);
+        // printf("invalid input: %s", )
     }
-    total_len += ARRAY_COUNT(lexer_patterns) - 1;
-
-    Token token = {0};
-    regex_t regex;
-    ASSERT(regcomp(&regex, "([(])|([)])|(true)|(false)|()|()|()", REG_EXTENDED) == 0);
-    regoff_t offset = 0;
-    while(lexer_yield(&regex, &offset, str)) {
-
-    }
-
-    
-    LOG_DEBUG("len: %lu, offset: %d", len, offset);
 }
 
 int main(const int argc, const char *argv[]) {
