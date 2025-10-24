@@ -129,6 +129,8 @@ typedef struct {
     TokenType type;
 } Token;
 
+#define LOG_DEBUG_TOKEN_NAME(lexic_analyzer, token) LOG_DEBUG("%.*s, %s", (token).end - (token).start, (lexic_analyzer).str + (token).start, token_type_str((token).type))
+
 typedef struct {
     regex_t regex;
     regoff_t offset;
@@ -170,14 +172,14 @@ static void lexic_analyzer_deinit(LexicAnalyzer *const lexic_analyzer) {
 }
 
 static bool lexic_analyzer_yield(LexicAnalyzer *const lexic_analyzer, Token *const token) {
-    regmatch_t regmatch[ARRAY_COUNT(token_regex_map) + 1] = {0};
-    static const uint8_t group_offset = 2;
+    #define GROUP_OFFSET 2
+    regmatch_t regmatch[ARRAY_COUNT(token_regex_map) + GROUP_OFFSET] = {0};
     if(regexec(&lexic_analyzer->regex, lexic_analyzer->str + lexic_analyzer->offset, ARRAY_COUNT(regmatch), regmatch, 0) != REG_NOMATCH) {
         // for debug puposes i want to be sure that token matches only for a single group
         bool group_found = false;
-        for(uint8_t i = group_offset; i < (uint8_t)ARRAY_COUNT(regmatch); ++i) {
+        for(uint8_t i = GROUP_OFFSET; i < (uint8_t)ARRAY_COUNT(regmatch); ++i) {
             if(regmatch[i].rm_so != -1 && regmatch[i].rm_eo != -1) {
-                const TokenType token_type = (TokenType)i - group_offset;
+                const TokenType token_type = (TokenType)i - GROUP_OFFSET;
                 if(token_type == TOKEN_TYPE_NEWLINE) {
                     lexic_analyzer->newline_index += 1;
                     lexic_analyzer->newline_offset = lexic_analyzer->offset;
@@ -185,15 +187,18 @@ static bool lexic_analyzer_yield(LexicAnalyzer *const lexic_analyzer, Token *con
                 ASSERT(group_found == false);
                 group_found = true;
                 token->type = token_type;
-                token->start = lexic_analyzer->offset + regmatch[i].rm_so;
-                token->end = lexic_analyzer->offset + regmatch[i].rm_eo;
+                token->start = lexic_analyzer->offset + regmatch[0].rm_so;
+                token->end = lexic_analyzer->offset + regmatch[0].rm_eo;
             }
         }
+        // LOG_DEBUG_TOKEN_NAME(*lexic_analyzer, *token);
+        // LOG_DEBUG("%s", lexic_analyzer->str + lexic_analyzer->offset);
         lexic_analyzer->offset += regmatch[0].rm_eo;
         return true;
     }
     ASSERT_EXT(lexic_analyzer->offset == (regoff_t)strlen(lexic_analyzer->str), "unrecognized input at %d:%d", lexic_analyzer->newline_index, lexic_analyzer->offset - lexic_analyzer->newline_offset);
     return false;
+    #undef GROUP_OFFSET
 }
 static bool lexic_analyzer_yield_no_whitespace(LexicAnalyzer *const lexic_analyzer, Token *const token) {
     while(lexic_analyzer_yield(lexic_analyzer, token)) {
@@ -216,6 +221,10 @@ static bool syntax_parse_function(LexicAnalyzer *const lexic_analyzer) {
     ASSERT(token.type == TOKEN_TYPE_LPAREN);
         ASSERT(lexic_analyzer_yield_no_whitespace(lexic_analyzer, &token));
         ASSERT(token.type == TOKEN_TYPE_KEYWORD_FN);
+
+        ASSERT(lexic_analyzer_yield_no_whitespace(lexic_analyzer, &token));
+        ASSERT(token.type == TOKEN_TYPE_IDENTIFIER);
+
         // paramlist
         ASSERT(lexic_analyzer_yield_no_whitespace(lexic_analyzer, &token));
         ASSERT(token.type == TOKEN_TYPE_LPAREN);
@@ -231,7 +240,6 @@ static bool syntax_parse_function(LexicAnalyzer *const lexic_analyzer) {
                 ASSERT(lexic_analyzer_yield_no_whitespace(lexic_analyzer, &token));
                 ASSERT(token.type == TOKEN_TYPE_RPAREN);
             }
-        ASSERT(lexic_analyzer_yield_no_whitespace(lexic_analyzer, &token));
         ASSERT(token.type == TOKEN_TYPE_RPAREN);
         
         // statement list
@@ -242,11 +250,10 @@ static bool syntax_parse_function(LexicAnalyzer *const lexic_analyzer) {
         ASSERT(token.type == TOKEN_TYPE_RPAREN);
     ASSERT(lexic_analyzer_yield_no_whitespace(lexic_analyzer, &token));
     ASSERT(token.type == TOKEN_TYPE_RPAREN);
+    return true;
 }
 
-static void syntax_analyze(void) {
-
-}
+static void syntax_analyze(void) {}
 
 int main(const int argc, const char *argv[]) {
     ASSERT(argc == 2);
@@ -264,8 +271,12 @@ int main(const int argc, const char *argv[]) {
     lexic_analyzer_init(&lexic_analyzer, data);
         Token token;
         while(lexic_analyzer_yield(&lexic_analyzer, &token)) {
-            LOG_DEBUG("%.*s, %s", token.end - token.start, lexic_analyzer.str + token.start, token_type_str(token.type));
+            LOG_DEBUG_TOKEN_NAME(lexic_analyzer, token);
         }
+        lexic_analyzer.newline_index = 0;
+        lexic_analyzer.newline_offset = 0;
+        lexic_analyzer.offset = 0;
+        syntax_parse_functions(&lexic_analyzer);
     lexic_analyzer_deinit(&lexic_analyzer);
     free(data);
 }
