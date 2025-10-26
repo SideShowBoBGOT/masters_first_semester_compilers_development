@@ -148,8 +148,15 @@ typedef struct {
     const char* str;
 } LexicAnalyzer;
 
+static void lexic_analyzer_reset(LexicAnalyzer *const lexic_analyzer) {
+    lexic_analyzer->newline_index = 0;
+    lexic_analyzer->newline_offset = 0;
+    lexic_analyzer->offset = 0;
+}
+
 static void lexic_analyzer_init(LexicAnalyzer *const lexic_analyzer, const char* const str) {
     *lexic_analyzer = (LexicAnalyzer){.str = str};
+    lexic_analyzer_reset(lexic_analyzer);
     {
         size_t regex_string_len = 0;
         regex_string_len += ARRAY_COUNT(token_regex_map) - 1;
@@ -176,6 +183,7 @@ static void lexic_analyzer_init(LexicAnalyzer *const lexic_analyzer, const char*
         free(regex_string);
     }
 }
+
 static void lexic_analyzer_deinit(LexicAnalyzer *const lexic_analyzer) {
     regfree(&lexic_analyzer->regex);
 }
@@ -297,6 +305,11 @@ typedef struct {
     SyntaxStatementList body;
 } SyntaxFunctionDefinition;
 
+// #define ASSERT_SYNTAX(lexic_analyzer, token, expr) ASSERT_EXT((expr), "Token: %s. Position %d:%d", token_type_str((token)->type), lexic_analyzer->newline_index, lexic_analyzer->offset - lexic_analyzer->newline_offset)
+// #define ASSERT_COMPILATION(lexic_analyzer, token) ASSERT_EXT(false, "Token `%s', but got: %s. Position %d:%d", token_type_str((expected_token)), token_type_str((token)->type), lexic_analyzer->newline_index, lexic_analyzer->offset - lexic_analyzer->newline_offset)
+
+#define ASSERT_TOKEN(lexic_analyzer, token, expected_token) ASSERT_EXT((token)->type == (expected_token), "Expected token `%s', but got: %s. Position %d:%d", token_type_str((expected_token)), token_type_str((token)->type), lexic_analyzer->newline_index, lexic_analyzer->offset - lexic_analyzer->newline_offset)
+
 static void syntax_function_call_inner(LexicAnalyzer *const lexic_analyzer, Token *const token);
 
 static bool syntax_function_call_argument(LexicAnalyzer *const lexic_analyzer, Token *const token, const bool assert_on_rparen) {
@@ -340,19 +353,19 @@ static void syntax_function_call_arguments(LexicAnalyzer *const lexic_analyzer, 
 
 static void syntax_function_call_inner(LexicAnalyzer *const lexic_analyzer, Token *const token) {
     ASSERT(lexic_analyzer_yield_no_whitespace(lexic_analyzer, token));
-    ASSERT(token->type == TOKEN_TYPE_IDENTIFIER);
+    ASSERT_TOKEN(lexic_analyzer, token, TOKEN_TYPE_IDENTIFIER);
     syntax_function_call_arguments(lexic_analyzer, token);
 }
 
 static void syntax_function_call(LexicAnalyzer *const lexic_analyzer, Token *const token) {
     ASSERT(lexic_analyzer_yield_no_whitespace(lexic_analyzer, token));
-    ASSERT(token->type == TOKEN_TYPE_LPAREN);
+    ASSERT_TOKEN(lexic_analyzer, token, TOKEN_TYPE_LPAREN);
     syntax_function_call_inner(lexic_analyzer, token);
 }
 
 static void syntax_statement_list(LexicAnalyzer *const lexic_analyzer, Token *const token) {
     ASSERT(lexic_analyzer_yield_no_whitespace(lexic_analyzer, token));
-    ASSERT(token->type == TOKEN_TYPE_LPAREN);
+    ASSERT_TOKEN(lexic_analyzer, token, TOKEN_TYPE_LPAREN);
         while(true) {
             ASSERT(lexic_analyzer_yield_no_whitespace(lexic_analyzer, token));
             if(token->type != TOKEN_TYPE_LPAREN) {
@@ -379,41 +392,43 @@ static void syntax_statement_list(LexicAnalyzer *const lexic_analyzer, Token *co
                     ASSERT(false);
                 }
             }
-            ASSERT(token->type == TOKEN_TYPE_IDENTIFIER);
+            ASSERT_TOKEN(lexic_analyzer, token, TOKEN_TYPE_RPAREN);
         }
-        ASSERT(token->type == TOKEN_TYPE_RPAREN);
-    ASSERT(lexic_analyzer_yield_no_whitespace(lexic_analyzer, token));
-    ASSERT(token->type == TOKEN_TYPE_RPAREN);
+    ASSERT_TOKEN(lexic_analyzer, token, TOKEN_TYPE_RPAREN);
 }
 
 static bool syntax_parse_function(LexicAnalyzer *const lexic_analyzer, Token *const token) {
-    ASSERT(lexic_analyzer_yield_no_whitespace(lexic_analyzer, token));
-    ASSERT(token->type == TOKEN_TYPE_LPAREN);
+    if(!lexic_analyzer_yield_no_whitespace(lexic_analyzer, token)) {
+        return false;
+    }
+    ASSERT_TOKEN(lexic_analyzer, token, TOKEN_TYPE_LPAREN);
         ASSERT(lexic_analyzer_yield_no_whitespace(lexic_analyzer, token));
-        ASSERT(token->type == TOKEN_TYPE_KEYWORD_FN);
+        ASSERT_TOKEN(lexic_analyzer, token, TOKEN_TYPE_KEYWORD_FN);
 
         ASSERT(lexic_analyzer_yield_no_whitespace(lexic_analyzer, token));
-        ASSERT(token->type == TOKEN_TYPE_IDENTIFIER);
+        ASSERT_TOKEN(lexic_analyzer, token, TOKEN_TYPE_IDENTIFIER);
 
         // paramlist
         ASSERT(lexic_analyzer_yield_no_whitespace(lexic_analyzer, token));
-        ASSERT(token->type == TOKEN_TYPE_LPAREN);
+        ASSERT_TOKEN(lexic_analyzer, token, TOKEN_TYPE_LPAREN);
             while(true) {
                 ASSERT(lexic_analyzer_yield_no_whitespace(lexic_analyzer, token));
                 if(token->type != TOKEN_TYPE_LPAREN) {
                     break;
                 }
                     ASSERT(lexic_analyzer_yield_no_whitespace(lexic_analyzer, token));
-                    ASSERT(token->type == TOKEN_TYPE_IDENTIFIER);
+                    ASSERT_TOKEN(lexic_analyzer, token, TOKEN_TYPE_IDENTIFIER);
                     ASSERT(lexic_analyzer_yield_no_whitespace(lexic_analyzer, token));
-                    ASSERT(token->type == TOKEN_TYPE_TYPENAME_INT || token->type == TOKEN_TYPE_TYPENAME_REAL || token->type == TOKEN_TYPE_TYPENAME_STRING);
+                    // ASSERT_TOKEN(lexic_analyzer, token, TOKEN_TYPE_TYPENAME_INT || token->type == TOKEN_TYPE_TYPENAME_REAL || token->type == TOKEN_TYPE_TYPENAME_STRING);
+                    ASSERT_TOKEN(lexic_analyzer, token, TOKEN_TYPE_TYPENAME_INT);
                 ASSERT(lexic_analyzer_yield_no_whitespace(lexic_analyzer, token));
-                ASSERT(token->type == TOKEN_TYPE_RPAREN);
+                ASSERT_TOKEN(lexic_analyzer, token, TOKEN_TYPE_RPAREN);
             }
-        ASSERT(token->type == TOKEN_TYPE_RPAREN);
+        ASSERT_TOKEN(lexic_analyzer, token, TOKEN_TYPE_RPAREN);
+
         syntax_statement_list(lexic_analyzer, token); 
     ASSERT(lexic_analyzer_yield_no_whitespace(lexic_analyzer, token));
-    ASSERT(token->type == TOKEN_TYPE_RPAREN);
+    ASSERT_TOKEN(lexic_analyzer, token, TOKEN_TYPE_RPAREN);
     return true;
 }
 
@@ -439,9 +454,7 @@ int main(const int argc, const char *argv[]) {
         while(lexic_analyzer_yield(&lexic_analyzer, &token)) {
             LOG_DEBUG_TOKEN_NAME(lexic_analyzer, token);
         }
-        lexic_analyzer.newline_index = 0;
-        lexic_analyzer.newline_offset = 0;
-        lexic_analyzer.offset = 0;
+        lexic_analyzer_reset(&lexic_analyzer);
         syntax_parse_functions(&lexic_analyzer, &token);
     lexic_analyzer_deinit(&lexic_analyzer);
     free(data);
