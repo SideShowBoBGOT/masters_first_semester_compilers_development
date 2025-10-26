@@ -61,6 +61,16 @@
         fprintf(stderr, "]\n");\
     } while(0)
 
+
+#define IF(cond) IF_ ## cond
+#define IF_0(t, f) f
+#define IF_1(t, f) t
+#define IF_ELSE(condition) IF_ELSE_ ## condition
+#define IF_ELSE_1(...) __VA_ARGS__ IF_ELSE_1_ELSE
+#define IF_ELSE_0(...)             IF_ELSE_0_ELSE
+#define IF_ELSE_1_ELSE(...)
+#define IF_ELSE_0_ELSE(...) __VA_ARGS__
+
 typedef enum {
     TOKEN_TYPE_LPAREN,
     TOKEN_TYPE_RPAREN,
@@ -148,7 +158,7 @@ static void lexic_analyzer_init(LexicAnalyzer *const lexic_analyzer, const char*
             regex_string_len += strlen(token_regex_map[i]);
         }
         regex_string_len += 3;
-        char *const regex_string = malloc(regex_string_len + 1);
+        char *const regex_string = (char*)malloc(regex_string_len + 1);
         regex_string[0] = '\0';
         strcat(regex_string, "^(");
             strcat(regex_string, "(");
@@ -171,6 +181,9 @@ static void lexic_analyzer_deinit(LexicAnalyzer *const lexic_analyzer) {
 }
 
 static bool lexic_analyzer_yield(LexicAnalyzer *const lexic_analyzer, Token *const token) {
+    #ifdef GROUP_OFFSET
+        #error
+    #endif
     #define GROUP_OFFSET 2
     regmatch_t regmatch[ARRAY_COUNT(token_regex_map) + GROUP_OFFSET] = {0};
     if(regexec(&lexic_analyzer->regex, lexic_analyzer->str + lexic_analyzer->offset, ARRAY_COUNT(regmatch), regmatch, 0) != REG_NOMATCH) {
@@ -178,7 +191,7 @@ static bool lexic_analyzer_yield(LexicAnalyzer *const lexic_analyzer, Token *con
         bool group_found = false;
         for(uint8_t i = GROUP_OFFSET; i < (uint8_t)ARRAY_COUNT(regmatch); ++i) {
             if(regmatch[i].rm_so != -1 && regmatch[i].rm_eo != -1) {
-                const TokenType token_type = (TokenType)i - GROUP_OFFSET;
+                const TokenType token_type = (TokenType)(i - GROUP_OFFSET);
                 if(token_type == TOKEN_TYPE_NEWLINE) {
                     lexic_analyzer->newline_index += 1;
                     lexic_analyzer->newline_offset = lexic_analyzer->offset;
@@ -284,7 +297,9 @@ typedef struct {
     SyntaxStatementList body;
 } SyntaxFunctionDefinition;
 
-static void syntax_function_call_argument(LexicAnalyzer *const lexic_analyzer, Token *const token) {
+static void syntax_function_call_inner(LexicAnalyzer *const lexic_analyzer, Token *const token);
+
+static bool syntax_function_call_argument(LexicAnalyzer *const lexic_analyzer, Token *const token, const bool assert_on_rparen) {
     ASSERT(lexic_analyzer_yield_no_whitespace(lexic_analyzer, token));
     switch(token->type) {
         case TOKEN_TYPE_IDENTIFIER: {
@@ -303,20 +318,24 @@ static void syntax_function_call_argument(LexicAnalyzer *const lexic_analyzer, T
             break;
         }
         case TOKEN_TYPE_LPAREN: {
-            ASSERT(lexic_analyzer_yield_no_whitespace(lexic_analyzer, token));
-            ASSERT(token->type == TOKEN_TYPE_RPAREN);
+            syntax_function_call_inner(lexic_analyzer, token);
             break;
+        }
+        case TOKEN_TYPE_RPAREN: {
+            if(assert_on_rparen) {
+                ASSERT(false);
+            }
+            return false;
         }
         default: {
             ASSERT(false);
         }
     }
+    return true;
 }
 
 static void syntax_function_call_arguments(LexicAnalyzer *const lexic_analyzer, Token *const token) {
-    while(true) {
-        syntax_function_call_argument(lexic_analyzer, token);
-    }
+    while(syntax_function_call_argument(lexic_analyzer, token, false)) {}
 }
 
 static void syntax_function_call_inner(LexicAnalyzer *const lexic_analyzer, Token *const token) {
@@ -328,9 +347,7 @@ static void syntax_function_call_inner(LexicAnalyzer *const lexic_analyzer, Toke
 static void syntax_function_call(LexicAnalyzer *const lexic_analyzer, Token *const token) {
     ASSERT(lexic_analyzer_yield_no_whitespace(lexic_analyzer, token));
     ASSERT(token->type == TOKEN_TYPE_LPAREN);
-        syntax_function_call_inner(lexic_analyzer, token);
-    ASSERT(lexic_analyzer_yield_no_whitespace(lexic_analyzer, token));
-    ASSERT(token->type == TOKEN_TYPE_RPAREN);
+    syntax_function_call_inner(lexic_analyzer, token);
 }
 
 static void syntax_statement_list(LexicAnalyzer *const lexic_analyzer, Token *const token) {
@@ -344,13 +361,13 @@ static void syntax_statement_list(LexicAnalyzer *const lexic_analyzer, Token *co
             ASSERT(lexic_analyzer_yield_no_whitespace(lexic_analyzer, token));
             switch(token->type) {
                 case TOKEN_TYPE_KEYWORD_IF: {
-                    syntax_function_call_argument(lexic_analyzer, token);
+                    syntax_function_call_argument(lexic_analyzer, token, true);
                     syntax_statement_list(lexic_analyzer, token);
                     syntax_statement_list(lexic_analyzer, token);
                     break;
                 }
                 case TOKEN_TYPE_KEYWORD_WHILE: {
-                    syntax_function_call_argument(lexic_analyzer, token);
+                    syntax_function_call_argument(lexic_analyzer, token, true);
                     syntax_statement_list(lexic_analyzer, token);
                     break;
                 }
@@ -394,15 +411,14 @@ static bool syntax_parse_function(LexicAnalyzer *const lexic_analyzer, Token *co
                 ASSERT(token->type == TOKEN_TYPE_RPAREN);
             }
         ASSERT(token->type == TOKEN_TYPE_RPAREN);
-        
         syntax_statement_list(lexic_analyzer, token); 
     ASSERT(lexic_analyzer_yield_no_whitespace(lexic_analyzer, token));
     ASSERT(token->type == TOKEN_TYPE_RPAREN);
     return true;
 }
 
-static void syntax_parse_functions(LexicAnalyzer *const lexic_analyzer) {
-    while(syntax_parse_function(lexic_analyzer)) {} 
+static void syntax_parse_functions(LexicAnalyzer *const lexic_analyzer, Token *const token) {
+    while(syntax_parse_function(lexic_analyzer, token)) {} 
 }
 
 int main(const int argc, const char *argv[]) {
@@ -411,7 +427,7 @@ int main(const int argc, const char *argv[]) {
     ASSERT_NOT_MINUS_ONE(fd);
     struct stat stat;
     ASSERT_NOT_MINUS_ONE(fstat(fd, &stat));
-    char *const data = malloc((size_t)stat.st_size + 1);
+    char *const data = (char*)malloc((size_t)stat.st_size + 1);
     ASSERT(data != NULL);
     ASSERT(read(fd, data, (size_t)stat.st_size) == stat.st_size);
     data[stat.st_size] = 0;
@@ -426,7 +442,7 @@ int main(const int argc, const char *argv[]) {
         lexic_analyzer.newline_index = 0;
         lexic_analyzer.newline_offset = 0;
         lexic_analyzer.offset = 0;
-        syntax_parse_functions(&lexic_analyzer);
+        syntax_parse_functions(&lexic_analyzer, &token);
     lexic_analyzer_deinit(&lexic_analyzer);
     free(data);
 }
