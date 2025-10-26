@@ -208,71 +208,15 @@ static bool lexic_analyzer_yield_no_whitespace(LexicAnalyzer *const lexic_analyz
     return false;
 }
 
+
+
 typedef struct {
  	regoff_t start;
     regoff_t end;
 } StringIndex;
 
-typedef enum {
-    SYNTAX_NODE_FUNCTION_ARGUMENT_TYPE_IDENTIFIER,
-    SYNTAX_NODE_FUNCTION_ARGUMENT_TYPE_INTEGER,
-    SYNTAX_NODE_FUNCTION_ARGUMENT_TYPE_FLOAT,
-    SYNTAX_NODE_FUNCTION_ARGUMENT_TYPE_STRING,
-    SYNTAX_NODE_FUNCTION_ARGUMENT_TYPE_FUNCTION_CALL,
-} SyntaxFunctionCallArgumentType;
-
 typedef struct {
-    SyntaxFunctionCallArgumentType type;
-    void *data;
-} SyntaxFunctionCallArgument;
 
-typedef struct {
-    StringIndex name;
-    struct {
-        SyntaxFunctionCallArgument *data;
-        size_t count;
-    } arguments;
-} SyntaxFunctionCall;
-
-typedef enum {
-    SYNTAX_NODE_STATEMENT_TYPE_IF,
-    SYNTAX_NODE_STATEMENT_TYPE_WHILE,
-    SYNTAX_NODE_STATEMENT_TYPE_FUNCTION_CALL,
-} SyntaxStatementType;
-
-typedef struct {
-    SyntaxStatementType **data;
-    size_t count;
-} SyntaxStatementList;
-
-typedef struct {
-    SyntaxStatementType type;
-    SyntaxFunctionCallArgument condition;
-    SyntaxStatementList branch_right;
-    SyntaxStatementList branch_left;
-} SyntaxStatementIf;
-
-typedef struct {
-    SyntaxStatementType type;
-    SyntaxFunctionCallArgument condition;
-    SyntaxStatementList body;
-} SyntaxStatementWhile;
-
-typedef struct {
-    SyntaxStatementType type;
-    SyntaxFunctionCall data;
-} SyntaxStatementFunctionCall;
-
-typedef enum {
-    SYNTAX_FUNCTION_PARAMETER_TYPE_INTEGER,
-    SYNTAX_FUNCTION_PARAMETER_TYPE_FLOAT,
-    SYNTAX_FUNCTION_PARAMETER_TYPE_BOOL,
-    SYNTAX_FUNCTION_PARAMETER_TYPE_STRING,
-} SyntaxFunctionParameterType;
-
-typedef struct {
-    StringIndex name;
-    SyntaxFunctionParameterType type;
 } SyntaxFunctionParameter;
 
 typedef struct {
@@ -281,8 +225,58 @@ typedef struct {
         SyntaxFunctionParameter *ptr;
         size_t count;
     } parameters;
-    SyntaxStatementList body;
+    SyntaxFunctionParameters parameters;
 } SyntaxFunctionDefinition;
+
+typedef enum {
+    SYNTAX_NODE_FUNCTION_ARGUMENT_TYPE_IDENTIFIER,
+    SYNTAX_NODE_FUNCTION_ARGUMENT_TYPE_INTEGER,
+    SYNTAX_NODE_FUNCTION_ARGUMENT_TYPE_FLOAT,
+    SYNTAX_NODE_FUNCTION_ARGUMENT_TYPE_STRING,
+    SYNTAX_NODE_FUNCTION_ARGUMENT_TYPE_FUNCTION_CALL,
+} SyntaxNodeFunctionCallArgumentType;
+
+typedef struct {
+    SyntaxNodeFunctionCallArgumentType type;
+    void *data;
+} SyntaxNodeFunctionCallArgument;
+
+typedef struct {
+    StringIndex name;
+    struct {
+        SyntaxNodeFunctionCallArgument *data;
+        size_t count;
+    } arguments;
+} SyntaxNodeFunctionCall;
+
+typedef enum {
+    SYNTAX_NODE_STATEMENT_TYPE_IF,
+    SYNTAX_NODE_STATEMENT_TYPE_WHILE,
+    SYNTAX_NODE_STATEMENT_TYPE_FUNCTION_CALL,
+} SyntaxNodeStatementType;
+
+typedef struct {
+    SyntaxNodeStatementType **data;
+    size_t count;
+} SyntaxNodeStatementList;
+
+typedef struct {
+    SyntaxNodeStatementType type;
+    SyntaxNodeFunctionCallArgument condition;
+    SyntaxNodeStatementList branch_right;
+    SyntaxNodeStatementList branch_left;
+} SyntaxNodeStatementIf;
+
+typedef struct {
+    SyntaxNodeStatementType type;
+    SyntaxNodeFunctionCallArgument condition;
+    SyntaxNodeStatementList body;
+} SyntaxNodeStatementWhile;
+
+typedef struct {
+    SyntaxNodeStatementType type;
+    SyntaxNodeFunctionCall data;
+} SyntaxNodeStatementFunctionCall;
 
 static void syntax_function_call_argument(LexicAnalyzer *const lexic_analyzer, Token *const token) {
     ASSERT(lexic_analyzer_yield_no_whitespace(lexic_analyzer, token));
