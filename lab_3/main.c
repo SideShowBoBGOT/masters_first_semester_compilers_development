@@ -406,7 +406,7 @@ static void syntax_statement_list(LexicAnalyzer *const lexic_analyzer, Token *co
                     ASSERT(false);
                 }
             }
-                    }
+        }
     ASSERT_TOKEN(lexic_analyzer, token, TOKEN_TYPE_RPAREN);
 }
 
