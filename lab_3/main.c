@@ -71,68 +71,46 @@
 #define IF_ELSE_1_ELSE(...)
 #define IF_ELSE_0_ELSE(...) __VA_ARGS__
 
+
+#define TOKENS_MAP \
+    X(LPAREN, "[(]")\
+    X(RPAREN, "[)]")\
+    X(KEYWORD_FN, "fn")\
+    X(KEYWORD_IF, "if")\
+    X(KEYWORD_WHILE, "while")\
+    X(TYPENAME_INT, "int")\
+    X(TYPENAME_REAL, "real")\
+    X(TYPENAME_STRING, "string")\
+    X(TYPENAME_BOOL, "bool")\
+    X(IDENTIFIER, "[a-zA-Z!$%&*/:<=>?^_~][a-zA-Z!$%&*/:<=>?^_~0-9]*|[+]|[-]")\
+    X(BOOLEAN, "true|false")\
+    X(INTEGER, "[+-]?[0-9]+")\
+    X(FLOAT, "[+-]?[0-9]+[.][0-9]+")\
+    X(STRING, "\"[^\"]*\"")\
+    X(NEWLINE, "\n")\
+    X(WHITESPACE, "[ \t]+")
+
 typedef enum {
-    TOKEN_TYPE_LPAREN,
-    TOKEN_TYPE_RPAREN,
-    TOKEN_TYPE_KEYWORD_FN,
-    TOKEN_TYPE_KEYWORD_IF,
-    TOKEN_TYPE_KEYWORD_WHILE,
-    TOKEN_TYPE_TYPENAME_INT,
-    TOKEN_TYPE_TYPENAME_REAL,
-    TOKEN_TYPE_TYPENAME_STRING,
-    TOKEN_TYPE_TYPENAME_BOOL,
-    TOKEN_TYPE_IDENTIFIER,
-    TOKEN_TYPE_BOOLEAN,
-    TOKEN_TYPE_INTEGER,
-    TOKEN_TYPE_FLOAT,
-    TOKEN_TYPE_STRING,
-    TOKEN_TYPE_NEWLINE,
-    TOKEN_TYPE_WHITESPACE,
+    #define X(name, regex) TOKEN_TYPE_ ## name,
+        TOKENS_MAP
+    #undef X
 } TokenType;
 
 static const char* token_regex_map[] = {
-    [TOKEN_TYPE_LPAREN] = "[(]",
-    [TOKEN_TYPE_RPAREN] = "[)]",
-    [TOKEN_TYPE_KEYWORD_FN] = "fn",
-    [TOKEN_TYPE_KEYWORD_IF] = "if",
-    [TOKEN_TYPE_KEYWORD_WHILE] = "while",
-    [TOKEN_TYPE_TYPENAME_INT] = "int",
-    [TOKEN_TYPE_TYPENAME_REAL] = "real",
-    [TOKEN_TYPE_TYPENAME_STRING] = "string",
-    [TOKEN_TYPE_TYPENAME_BOOL] = "bool",
-    [TOKEN_TYPE_IDENTIFIER] = "[a-zA-Z!$%&*/:<=>?^_~][a-zA-Z!$%&*/:<=>?^_~0-9]*|[+]|[-]",
-    [TOKEN_TYPE_BOOLEAN] = "true|false",
-    [TOKEN_TYPE_INTEGER] = "[+-]?[0-9]+",
-    [TOKEN_TYPE_FLOAT] = "[+-]?[0-9]+[.][0-9]+",
-    [TOKEN_TYPE_STRING] = "\"[^\"]*\"",
-    [TOKEN_TYPE_NEWLINE] = "\n",
-    [TOKEN_TYPE_WHITESPACE] = "[ \t]+",
+    #define X(name, regex) [TOKEN_TYPE_ ## name] = regex,
+        TOKENS_MAP
+    #undef X
 };
 
 static const char* token_type_str(const TokenType type) {
-    #define DEFINE_CASE(val) case val: return STRINGIFY(val)
-        switch(type) {
-            DEFINE_CASE(TOKEN_TYPE_LPAREN);
-            DEFINE_CASE(TOKEN_TYPE_RPAREN);
-            DEFINE_CASE(TOKEN_TYPE_KEYWORD_FN);
-            DEFINE_CASE(TOKEN_TYPE_KEYWORD_IF);
-            DEFINE_CASE(TOKEN_TYPE_KEYWORD_WHILE);
-            DEFINE_CASE(TOKEN_TYPE_TYPENAME_INT);
-            DEFINE_CASE(TOKEN_TYPE_TYPENAME_REAL);
-            DEFINE_CASE(TOKEN_TYPE_TYPENAME_STRING);
-            DEFINE_CASE(TOKEN_TYPE_TYPENAME_BOOL);
-            DEFINE_CASE(TOKEN_TYPE_IDENTIFIER);
-            DEFINE_CASE(TOKEN_TYPE_BOOLEAN);
-            DEFINE_CASE(TOKEN_TYPE_INTEGER);
-            DEFINE_CASE(TOKEN_TYPE_FLOAT);
-            DEFINE_CASE(TOKEN_TYPE_STRING);
-            DEFINE_CASE(TOKEN_TYPE_NEWLINE);
-            DEFINE_CASE(TOKEN_TYPE_WHITESPACE);
-            default: {
-                ASSERT(false);
-            }
+    switch(type) {
+        #define X(name, regex) case TOKEN_TYPE_ ## name: return STRINGIFY(TOKEN_TYPE_ ## name);
+            TOKENS_MAP
+        #undef X
+        default: {
+            ASSERT(false);
         }
-    #undef DEFINE_CASE
+    }
 }
 
 typedef struct {
@@ -232,85 +210,6 @@ static bool lexic_analyzer_yield_no_whitespace(LexicAnalyzer *const lexic_analyz
     }
     return false;
 }
-
-typedef struct {
- 	regoff_t start;
-    regoff_t end;
-} StringIndex;
-
-typedef enum {
-    SYNTAX_NODE_FUNCTION_ARGUMENT_TYPE_IDENTIFIER,
-    SYNTAX_NODE_FUNCTION_ARGUMENT_TYPE_INTEGER,
-    SYNTAX_NODE_FUNCTION_ARGUMENT_TYPE_FLOAT,
-    SYNTAX_NODE_FUNCTION_ARGUMENT_TYPE_STRING,
-    SYNTAX_NODE_FUNCTION_ARGUMENT_TYPE_FUNCTION_CALL,
-} SyntaxFunctionCallArgumentType;
-
-typedef struct {
-    SyntaxFunctionCallArgumentType type;
-    void *data;
-} SyntaxFunctionCallArgument;
-
-typedef struct {
-    StringIndex name;
-    struct {
-        SyntaxFunctionCallArgument *data;
-        size_t count;
-    } arguments;
-} SyntaxFunctionCall;
-
-typedef enum {
-    SYNTAX_NODE_STATEMENT_TYPE_IF,
-    SYNTAX_NODE_STATEMENT_TYPE_WHILE,
-    SYNTAX_NODE_STATEMENT_TYPE_FUNCTION_CALL,
-} SyntaxStatementType;
-
-typedef struct {
-    SyntaxStatementType **data;
-    size_t count;
-} SyntaxStatementList;
-
-typedef struct {
-    SyntaxStatementType type;
-    SyntaxFunctionCallArgument condition;
-    SyntaxStatementList branch_right;
-    SyntaxStatementList branch_left;
-} SyntaxStatementIf;
-
-typedef struct {
-    SyntaxStatementType type;
-    SyntaxFunctionCallArgument condition;
-    SyntaxStatementList body;
-} SyntaxStatementWhile;
-
-typedef struct {
-    SyntaxStatementType type;
-    SyntaxFunctionCall data;
-} SyntaxStatementFunctionCall;
-
-typedef enum {
-    SYNTAX_FUNCTION_PARAMETER_TYPE_INTEGER,
-    SYNTAX_FUNCTION_PARAMETER_TYPE_FLOAT,
-    SYNTAX_FUNCTION_PARAMETER_TYPE_BOOL,
-    SYNTAX_FUNCTION_PARAMETER_TYPE_STRING,
-} SyntaxFunctionParameterType;
-
-typedef struct {
-    StringIndex name;
-    SyntaxFunctionParameterType type;
-} SyntaxFunctionParameter;
-
-typedef struct {
-    StringIndex name;
-    struct {
-        SyntaxFunctionParameter *ptr;
-        size_t count;
-    } parameters;
-    SyntaxStatementList body;
-} SyntaxFunctionDefinition;
-
-// #define ASSERT_SYNTAX(lexic_analyzer, token, expr) ASSERT_EXT((expr), "Token: %s. Position %d:%d", token_type_str((token)->type), lexic_analyzer->newline_index, lexic_analyzer->offset - lexic_analyzer->newline_offset)
-// #define ASSERT_COMPILATION(lexic_analyzer, token) ASSERT_EXT(false, "Token `%s', but got: %s. Position %d:%d", token_type_str((expected_token)), token_type_str((token)->type), lexic_analyzer->newline_index, lexic_analyzer->offset - lexic_analyzer->newline_offset)
 
 #define ASSERT_TOKEN(lexic_analyzer, token, ...)\
     do {\
