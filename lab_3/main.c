@@ -81,7 +81,7 @@
     X(KEYWORD_SET, "set")\
     X(KEYWORD_RETURN, "return")\
     X(TYPENAME_INT, "int")\
-    X(TYPENAME_REAL, "float")\
+    X(TYPENAME_FLOAT, "float")\
     X(TYPENAME_STRING, "string")\
     X(TYPENAME_BOOL, "bool")\
     X(IDENTIFIER, "[a-zA-Z!$%&*/:<=>?^_~][a-zA-Z!$%&*/:<=>?^_~0-9]*|[+]|[-]")\
@@ -226,6 +226,23 @@ static bool lexic_analyzer_yield_no_whitespace(LexicAnalyzer lexic_analyzer[stat
     } while(0)
 
 typedef enum {
+    SYNTAX_FUNCTION_DEFINITION_PARAMETER_TYPE_BOOL,
+    SYNTAX_FUNCTION_DEFINITION_PARAMETER_TYPE_INT,
+    SYNTAX_FUNCTION_DEFINITION_PARAMETER_TYPE_FLOAT,
+    SYNTAX_FUNCTION_DEFINITION_PARAMETER_TYPE_STRING,
+} SyntaxFunctionDefinitionParameterType;
+
+static SyntaxFunctionDefinitionParameterType syntax_function_definition_parameter_type_from_token_type(const TokenType type) {
+    switch(type) {
+        case TOKEN_TYPE_TYPENAME_BOOL: return SYNTAX_FUNCTION_DEFINITION_PARAMETER_TYPE_BOOL;
+        case TOKEN_TYPE_TYPENAME_INT: return SYNTAX_FUNCTION_DEFINITION_PARAMETER_TYPE_INT;
+        case TOKEN_TYPE_TYPENAME_FLOAT: return SYNTAX_FUNCTION_DEFINITION_PARAMETER_TYPE_FLOAT;
+        case TOKEN_TYPE_TYPENAME_STRING: return SYNTAX_FUNCTION_DEFINITION_PARAMETER_TYPE_STRING;
+        default: ASSERT(false);
+    }
+}
+
+typedef enum {
     SYNTAX_FUNCTION_CALL_PARAMETER_TYPE_IDENTIFIER,
     SYNTAX_FUNCTION_CALL_PARAMETER_TYPE_BOOLEAN,
     SYNTAX_FUNCTION_CALL_PARAMETER_TYPE_INTEGER,
@@ -237,7 +254,7 @@ typedef enum {
 #define SYNTAX_CALLBACK_FUNCTIONS\
     X(function_definition_begin, void, void *const context, const StringRange name[static 1])\
     X(function_definition_parameter_name, void, void *const context, const StringRange string_range[static 1])\
-    X(function_definition_parameter_typename, void, void *const context, const StringRange string_range[static 1])\
+    X(function_definition_parameter_typename, void, void *const context, const SyntaxFunctionDefinitionParameterType type)\
     X(function_call_parameter_type, void, void *const context, const SyntaxFunctionCallParameterType type)\
     X(function_call_parameter_string_range, void, void *const context, const StringRange name[static 1])\
     X(statement_list_begin, void, void *const context)\
@@ -395,8 +412,8 @@ static bool syntax_parse_function(
                     syntax_callback_functions->function_definition_parameter_name(syntax_callback_context, &token->string_range);
 
                     ASSERT(lexic_analyzer_yield_no_whitespace(lexic_analyzer, token)); 
-                    ASSERT_TOKEN(lexic_analyzer, token, TOKEN_TYPE_TYPENAME_INT, TOKEN_TYPE_TYPENAME_REAL, TOKEN_TYPE_TYPENAME_STRING, TOKEN_TYPE_TYPENAME_BOOL); 
-                    syntax_callback_functions->function_definition_parameter_typename(syntax_callback_context, &token->string_range);
+                    ASSERT_TOKEN(lexic_analyzer, token, TOKEN_TYPE_TYPENAME_INT, TOKEN_TYPE_TYPENAME_FLOAT, TOKEN_TYPE_TYPENAME_STRING, TOKEN_TYPE_TYPENAME_BOOL); 
+                    syntax_callback_functions->function_definition_parameter_typename(syntax_callback_context, syntax_function_definition_parameter_type_from_token_type(token->type));
 
                 ASSERT(lexic_analyzer_yield_no_whitespace(lexic_analyzer, token)); 
                 ASSERT_TOKEN(lexic_analyzer, token, TOKEN_TYPE_RPAREN); 
@@ -434,7 +451,7 @@ static void syntax_callback_counter_function_definition_parameter_name(void *con
     SyntaxCallbackCounter *const syntax_callback_counter = (SyntaxCallbackCounter*)context;
     syntax_callback_counter->function_definition_parameter_count++;
 }
-static void syntax_callback_counter_function_definition_parameter_typename(void *const context, const StringRange name[static 1]) {}
+static void syntax_callback_counter_function_definition_parameter_typename(void *const context, const SyntaxFunctionDefinitionParameterType type) {}
 static void syntax_callback_counter_statement_list_begin(void *const context) {
     SyntaxCallbackCounter *const syntax_callback_counter = (SyntaxCallbackCounter*)context;
     syntax_callback_counter->statement_list_count++;
@@ -462,42 +479,72 @@ static const SyntaxCallbackFunctions syntax_callback_counter_functions = {
 #undef X
 };
 
-// typedef struct {
-//     size_t start;
-//     size_t end;
-// } Range;
+typedef struct {
+    size_t start;
+    size_t end;
+} Range;
+
+typedef enum {
+    PARAMETER_TYPE_BOOLEAN,
+    PARAMETER_TYPE_INTEGER,
+    PARAMETER_TYPE_FLOAT,
+    PARAMETER_TYPE_STRING,
+} SyntaxFunctionDefinitionParameter;
+
+typedef struct {
+    struct {
+        struct {
+            StringRange name;
+            SyntaxFunctionDefinitionParameter type;
+        } *data;
+        size_t count;
+    } function_definition_parameters;
+    struct {
+        struct {
+            StringRange name;
+            Range parameters;
+            Range statements;
+        } *data;
+        size_t count;
+    } function_definitions;
+    size_t function_definition_parameter_start_index;
+} SyntaxCallbackBreadthFirstLayout;
+
+// static void syntax_callback_breadth_first_layout_init(SyntaxCallbackBreadthFirstLayout syntax_callback_breadth_first_layout[static 1], const SyntaxCallbackCounter syntax_callback_counter[static 1]) {
+//     syntax_callback_breadth_first_layout = (SyntaxCallbackBreadthFirstLayout){
+//         .function_definition_parameters.data = calloc(syntax_callback_counter->function_definition_count)
+//     }
+// }
+
+static void syntax_callback_breadth_first_layout_function_definition_begin(void *const context, const StringRange name[static 1]) {
+    SyntaxCallbackBreadthFirstLayout *const ctx = (SyntaxCallbackBreadthFirstLayout*)context;
+    ctx->function_definitions.data[ctx->function_definitions.count++].name = *name;
+    ctx->function_definition_parameter_start_index = ctx->function_definition_parameters.count;
+}
+// X(function_definition_begin, void, void *const context, const StringRange name[static 1])\
+//     X(function_definition_parameter_name, void, void *const context, const StringRange string_range[static 1])\
+//     X(function_definition_parameter_typename, void, void *const context, const StringRange string_range[static 1])\
+//     X(function_call_parameter_type, void, void *const context, const SyntaxFunctionCallParameterType type)\
+//     X(function_call_parameter_string_range, void, void *const context, const StringRange name[static 1])\
+//     X(statement_list_begin, void, void *const context)\
+//     X(function_call_begin, void, void *const context, const StringRange name[static 1])\
+//     X(if_begin, void, void *const context)\
+//     X(while_begin, void, void *const context)\
+
+// static void syntax_callback_breadth_first_layout_function_patameter_name(void *const context, const StringRange name[static 1]) {
+//     SyntaxCallbackBreadthFirstLayout *const ctx = (SyntaxCallbackBreadthFirstLayout*)context;
+//     ctx->function_definition_parameters.data[ctx->function_definition_parameters.count++].name = *name;
+// }
+// static void syntax_callback_breadth_first_layout_function_patameter_typename(void *const context, const StringRange name[static 1]) {
+//     SyntaxCallbackBreadthFirstLayout *const ctx = (SyntaxCallbackBreadthFirstLayout*)context;
+//     ctx->function_definition_parameters.data[ctx->function_definition_parameters.count - 1].type = *name;
+// }
 //
-// typedef enum {
-//     PARAMETER_TYPE_BOOLEAN,
-//     PARAMETER_TYPE_INTEGER,
-//     PARAMETER_TYPE_FLOAT,
-//     PARAMETER_TYPE_STRING,
-// } SyntaxParameterType;
-//
-// typedef enum {
-//
-// } FunctionCallArgumentType;
-//
-// typedef struct {
-//
-// } SyntaxStatementIf;
-//
-//
-// typedef struct {
-//     struct {
-//         StringRange name;
-//         ParameterType type;
-//     } *parameters;
-//     struct {
-//
-//     } *statement;
-//     struct {
-//         StringRange name;
-//         Range parameters;
-//         Range statements;
-//     } *function_definitions;
-//
-// } SyntaxCallbackCollector;
+// static const SyntaxCallbackFunctions syntax_callback_breadth_first_layout_functions = {
+// #define X(name, ...) .name = syntax_callback_breadth_first_layout_ ## name,
+//     SYNTAX_CALLBACK_FUNCTIONS
+// #undef X
+// };
 
 int main(const int argc, const char *argv[]) {
     ASSERT(argc == 2);
