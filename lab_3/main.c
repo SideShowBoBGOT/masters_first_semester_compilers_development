@@ -474,48 +474,49 @@ typedef struct {
 #undef X
 } SyntaxCallbackCounter;
 
-static void syntax_callback_counter_function_definition_begin(SyntaxCallbackData data[static 1], const StringRange name[static 1]) {
-    syntax_callback_counter->function_definition_count++;
+static void syntax_callback_counter_function_definition_begin(SyntaxCallbackCounter data[static 1], const StringRange name[static 1]) {
+    data->function_definitions++;
 }
-static void syntax_callback_counter_function_definition_parameter_list_begin(SyntaxCallbackData data[static 1]) {}
-static void syntax_callback_counter_function_definition_parameter_list_end(SyntaxCallbackData data[static 1]) {}
-static void syntax_callback_counter_function_definition_parameter_name(SyntaxCallbackData data[static 1], const StringRange name[static 1]) {
-    SyntaxCallbackCounter *const syntax_callback_counter = (SyntaxCallbackCounter*)context;
-    syntax_callback_counter->function_definition_parameter_count++;
+static void syntax_callback_counter_function_definition_parameter_list_begin(SyntaxCallbackCounter data[static 1]) {}
+static void syntax_callback_counter_function_definition_parameter_list_end(SyntaxCallbackCounter data[static 1]) {}
+static void syntax_callback_counter_function_definition_parameter_name(SyntaxCallbackCounter data[static 1], const StringRange name[static 1]) {
+    data->function_definition_parameters++;
 }
-static void syntax_callback_counter_function_definition_parameter_type(SyntaxCallbackData data[static 1], const SyntaxFunctionDefinitionParameterType type) {}
-static void syntax_callback_counter_statement_list_begin(SyntaxCallbackData data[static 1]) {
-    SyntaxCallbackCounter *const syntax_callback_counter = (SyntaxCallbackCounter*)context;
-    syntax_callback_counter->statement_list_count++;
+static void syntax_callback_counter_function_definition_parameter_type(SyntaxCallbackCounter data[static 1], const SyntaxFunctionDefinitionParameterType type) {}
+static void syntax_callback_counter_statement_list_begin(SyntaxCallbackCounter data[static 1]) {
+    data->statement_lists++;
 }
-static void syntax_callback_counter_function_call_begin(SyntaxCallbackData data[static 1], const StringRange name[static 1]) {
-    SyntaxCallbackCounter *const syntax_callback_counter = (SyntaxCallbackCounter*)context;
-    syntax_callback_counter->function_call_count++;
+static void syntax_callback_counter_function_call_begin(SyntaxCallbackCounter data[static 1], const StringRange name[static 1]) {
+    data->function_calls++;
 }
-static void syntax_callback_counter_function_call_parameter_type(SyntaxCallbackData data[static 1], const SyntaxFunctionCallParameterType type) {
-    SyntaxCallbackCounter *const syntax_callback_counter = (SyntaxCallbackCounter*)context;
-    syntax_callback_counter->function_call_parameter_count++;
+static void syntax_callback_counter_function_call_parameter_type(SyntaxCallbackCounter data[static 1], const SyntaxFunctionCallParameterType type) {
+    data->function_call_parameters++;
 }
-static void syntax_callback_counter_function_call_parameter_string_range(SyntaxCallbackData data[static 1], const StringRange string_range[static 1]) {}
-static void syntax_callback_counter_if_begin(SyntaxCallbackData data[static 1]) {
-    SyntaxCallbackCounter *const syntax_callback_counter = (SyntaxCallbackCounter*)context;
-    syntax_callback_counter->if_count++;
+static void syntax_callback_counter_function_call_parameter_string_range(SyntaxCallbackCounter data[static 1], const StringRange string_range[static 1]) {}
+static void syntax_callback_counter_if_begin(SyntaxCallbackCounter data[static 1]) {
+    data->statement_ifs++;
 }
-static void syntax_callback_counter_while_begin(SyntaxCallbackData data[static 1]) {
-    SyntaxCallbackCounter *const syntax_callback_counter = (SyntaxCallbackCounter*)context;
-    syntax_callback_counter->while_count++;
+static void syntax_callback_counter_while_begin(SyntaxCallbackCounter data[static 1]) {
+    data->statement_whiles++;
 }
-static const SyntaxCallbackFunctions syntax_callback_counter_functions = {
+
+typedef struct {
+#define X(name, return_type, ...) return_type(*name)(SyntaxCallbackCounter context[static 1] __VA_OPT__(,) __VA_ARGS__);
+    SYNTAX_CALLBACK_FUNCTIONS
+#undef X
+} SyntaxCallbackFunctionsCounter;
+
+static const SyntaxCallbackFunctionsCounter syntax_callback_functions_counter = {
 #define X(name, ...) .name = syntax_callback_counter_ ## name,
     SYNTAX_CALLBACK_FUNCTIONS
 #undef X
 };
 
-typedef struct {
-#define X(field, element_type) struct { element_type *data; size_t count; } field;
-    SYNTAX_CALLBACK_FIELDS
-#undef X
-} SyntaxCallbackLayout;
+// typedef struct {
+// #define X(field, element_type) struct { element_type *data; size_t count; } field;
+//     SYNTAX_CALLBACK_FIELDS
+// #undef X
+// } SyntaxCallbackLayout;
 
 // static void syntax_callback_breadth_first_layout_init(SyntaxCallbackBreadthFirstLayout syntax_callback_breadth_first_layout[static 1], const SyntaxCallbackCounter syntax_callback_counter[static 1]) {
 //     syntax_callback_breadth_first_layout = (SyntaxCallbackBreadthFirstLayout){
@@ -523,37 +524,37 @@ typedef struct {
 //     }
 // }
 
-static void syntax_callback_breadth_first_layout_function_definition_begin(SyntaxCallbackData data[static 1], const StringRange name[static 1]) {
-    SyntaxCallbackBreadthFirstLayout *const ctx = (SyntaxCallbackBreadthFirstLayout*)context;
-    ctx->function_definitions.data[ctx->function_definitions.count++].name = *name;
-}
-static void syntax_callback_breadth_first_layout_function_definition_parameter_list_begin(SyntaxCallbackData data[static 1]) {
-    SyntaxCallbackBreadthFirstLayout *const ctx = (SyntaxCallbackBreadthFirstLayout*)context;
-    ctx->function_definition_parameter_start_index = ctx->function_definition_parameters.count;
-}
-static void syntax_callback_breadth_first_layout_function_definition_parameter_list_end(SyntaxCallbackData data[static 1]) {
-    SyntaxCallbackBreadthFirstLayout *const ctx = (SyntaxCallbackBreadthFirstLayout*)context;
-    ctx->function_definitions.data[ctx->function_definitions.count - 1].parameter_range = (Range){
-        ctx->function_definition_parameter_start_index,
-        ctx->function_definition_parameters.count - ctx->function_definition_parameter_start_index
-    };
-}
-
-static void syntax_callback_breadth_first_layout_function_definition_parameter_name(SyntaxCallbackData data[static 1], const StringRange name[static 1]) {
-    SyntaxCallbackBreadthFirstLayout *const ctx = (SyntaxCallbackBreadthFirstLayout*)context;
-    ctx->function_definition_parameters.data[ctx->function_definition_parameters.count++].name = *name;
-}
-
-static void syntax_callback_breadth_first_layout_function_definition_parameter_type(SyntaxCallbackData data[static 1], const SyntaxFunctionDefinitionParameterType type) {
-    SyntaxCallbackBreadthFirstLayout *const ctx = (SyntaxCallbackBreadthFirstLayout*)context;
-    ctx->function_definition_parameters.data[ctx->function_definition_parameters.count - 1].type = type;
-}
-
-static const SyntaxCallbackFunctions syntax_callback_breadth_first_layout_functions = {
-#define X(name, ...) .name = syntax_callback_breadth_first_layout_ ## name,
-    SYNTAX_CALLBACK_FUNCTIONS
-#undef X
-};
+// static void syntax_callback_breadth_first_layout_function_definition_begin(SyntaxCallbackData data[static 1], const StringRange name[static 1]) {
+//     SyntaxCallbackBreadthFirstLayout *const ctx = (SyntaxCallbackBreadthFirstLayout*)context;
+//     ctx->function_definitions.data[ctx->function_definitions.count++].name = *name;
+// }
+// static void syntax_callback_breadth_first_layout_function_definition_parameter_list_begin(SyntaxCallbackData data[static 1]) {
+//     SyntaxCallbackBreadthFirstLayout *const ctx = (SyntaxCallbackBreadthFirstLayout*)context;
+//     ctx->function_definition_parameter_start_index = ctx->function_definition_parameters.count;
+// }
+// static void syntax_callback_breadth_first_layout_function_definition_parameter_list_end(SyntaxCallbackData data[static 1]) {
+//     SyntaxCallbackBreadthFirstLayout *const ctx = (SyntaxCallbackBreadthFirstLayout*)context;
+//     ctx->function_definitions.data[ctx->function_definitions.count - 1].parameter_range = (Range){
+//         ctx->function_definition_parameter_start_index,
+//         ctx->function_definition_parameters.count - ctx->function_definition_parameter_start_index
+//     };
+// }
+//
+// static void syntax_callback_breadth_first_layout_function_definition_parameter_name(SyntaxCallbackData data[static 1], const StringRange name[static 1]) {
+//     SyntaxCallbackBreadthFirstLayout *const ctx = (SyntaxCallbackBreadthFirstLayout*)context;
+//     ctx->function_definition_parameters.data[ctx->function_definition_parameters.count++].name = *name;
+// }
+//
+// static void syntax_callback_breadth_first_layout_function_definition_parameter_type(SyntaxCallbackData data[static 1], const SyntaxFunctionDefinitionParameterType type) {
+//     SyntaxCallbackBreadthFirstLayout *const ctx = (SyntaxCallbackBreadthFirstLayout*)context;
+//     ctx->function_definition_parameters.data[ctx->function_definition_parameters.count - 1].type = type;
+// }
+//
+// static const SyntaxCallbackFunctions syntax_callback_breadth_first_layout_functions = {
+// #define X(name, ...) .name = syntax_callback_breadth_first_layout_ ## name,
+//     SYNTAX_CALLBACK_FUNCTIONS
+// #undef X
+// };
 
 int main(const int argc, const char *argv[]) {
     ASSERT(argc == 2);
@@ -577,15 +578,15 @@ int main(const int argc, const char *argv[]) {
         lexic_analyzer_reset(&lexic_analyzer);
 
         SyntaxCallbackCounter syntax_callback_counter = {0};
-        syntax_parse_functions(&lexic_analyzer, &token, &syntax_callback_counter_functions, &syntax_callback_counter);
-        LOG_DEBUG("function_definition_parameter_count: %lu", syntax_callback_counter.function_definition_parameter_count);
-        LOG_DEBUG("function_definition_count: %lu", syntax_callback_counter.function_definition_count);
-        LOG_DEBUG("statement_list_count: %lu", syntax_callback_counter.statement_list_count);
-        LOG_DEBUG("statement_count: %lu", syntax_callback_counter.statement_count);
-        LOG_DEBUG("function_call_count: %lu", syntax_callback_counter.function_call_count);
-        LOG_DEBUG("function_call_parameter_count: %lu", syntax_callback_counter.function_call_parameter_count);
-        LOG_DEBUG("if_count: %lu", syntax_callback_counter.if_count);
-        LOG_DEBUG("while_count: %lu", syntax_callback_counter.while_count);
+        syntax_parse_functions(&lexic_analyzer, &token, (const SyntaxCallbackFunctions*)&syntax_callback_functions_counter, &syntax_callback_counter);
+        // LOG_DEBUG("function_definition_parameter_count: %lu", syntax_callback_counter.function_definition_parameter_count);
+        // LOG_DEBUG("function_definition_count: %lu", syntax_callback_counter.function_definition_count);
+        // LOG_DEBUG("statement_list_count: %lu", syntax_callback_counter.statement_list_count);
+        // LOG_DEBUG("statement_count: %lu", syntax_callback_counter.statement_count);
+        // LOG_DEBUG("function_call_count: %lu", syntax_callback_counter.function_call_count);
+        // LOG_DEBUG("function_call_parameter_count: %lu", syntax_callback_counter.function_call_parameter_count);
+        // LOG_DEBUG("if_count: %lu", syntax_callback_counter.if_count);
+        // LOG_DEBUG("while_count: %lu", syntax_callback_counter.while_count);
 
     lexic_analyzer_deinit(&lexic_analyzer);
 
