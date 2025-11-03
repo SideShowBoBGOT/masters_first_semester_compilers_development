@@ -260,20 +260,28 @@ typedef enum {
 } SyntaxStatementType;
 
 #define SYNTAX_CALLBACK_FUNCTIONS\
-    X(function_definition_begin, void, const StringRange name[static 1])\
-    X(function_definition_parameter_list_begin, void)\
-    X(function_definition_parameter_list_end, void)\
-    X(function_definition_parameter_name, void, const StringRange string_range[static 1])\
-    X(function_definition_parameter_type, void, const SyntaxFunctionDefinitionParameterType type)\
-    X(function_call_parameter_type, void, const SyntaxFunctionCallParameterType type)\
-    X(function_call_parameter_string_range, void, const StringRange name[static 1])\
-    X(statement_list_begin, void)\
-    X(function_call_begin, void, const StringRange name[static 1])\
-    X(if_begin, void)\
-    X(while_begin, void)\
+    X(function_definition_begin, const StringRange name[static 1])\
+    X(function_definition_parameter_list_begin)\
+    X(function_definition_parameter_list_end)\
+    X(function_definition_parameter_name, const StringRange string_range[static 1])\
+    X(function_definition_parameter_type, const SyntaxFunctionDefinitionParameterType type)\
+    X(statement_list_begin)\
+    X(statement_list_end)\
+    X(statement, const SyntaxStatementType type)\
+    X(function_call_parameter_indentifier, const StringRange string_range[static 1])\
+    X(function_call_parameter_bool, const StringRange string_range[static 1])\
+    X(function_call_parameter_int, const StringRange string_range[static 1])\
+    X(function_call_parameter_float, const StringRange string_range[static 1])\
+    X(function_call_parameter_string, const StringRange name[static 1])\
+    X(function_call_parameter_function_call)\
+    X(function_call_begin, const StringRange name[static 1])\
+    X(if_begin)\
+    X(while_begin)\
+    X(set_begin)\
+    X(return_begin)\
 
 typedef struct {
-#define X(name, return_type, ...) return_type(*name)(void *const context __VA_OPT__(,) __VA_ARGS__);
+#define X(name, ...) void(*name)(void *const context __VA_OPT__(,) __VA_ARGS__);
     SYNTAX_CALLBACK_FUNCTIONS
 #undef X
 } SyntaxCallbackFunctions;
@@ -284,27 +292,27 @@ static bool syntax_function_call_argument(LexicAnalyzer lexic_analyzer[static 1]
     ASSERT(lexic_analyzer_yield_no_whitespace(lexic_analyzer, token));
     switch(token->type) {
         case TOKEN_TYPE_IDENTIFIER: {
-            syntax_callback_functions->function_call_parameter_type(syntax_callback_context, SYNTAX_FUNCTION_CALL_PARAMETER_TYPE_IDENTIFIER);
+            syntax_callback_functions->function_call_parameter_indentifier(syntax_callback_context, &token->string_range);
             break;
         }
         case TOKEN_TYPE_BOOLEAN: {
-            syntax_callback_functions->function_call_parameter_type(syntax_callback_context, SYNTAX_FUNCTION_CALL_PARAMETER_TYPE_BOOLEAN);
+            syntax_callback_functions->function_call_parameter_bool(syntax_callback_context, &token->string_range);
             break;
         }
         case TOKEN_TYPE_INTEGER: {
-            syntax_callback_functions->function_call_parameter_type(syntax_callback_context, SYNTAX_FUNCTION_CALL_PARAMETER_TYPE_INTEGER);
+            syntax_callback_functions->function_call_parameter_int(syntax_callback_context, &token->string_range);
             break;
         }
         case TOKEN_TYPE_FLOAT: {
-            syntax_callback_functions->function_call_parameter_type(syntax_callback_context, SYNTAX_FUNCTION_CALL_PARAMETER_TYPE_FLOAT);
+            syntax_callback_functions->function_call_parameter_float(syntax_callback_context, &token->string_range);
             break;
         }
         case TOKEN_TYPE_STRING: {
-            syntax_callback_functions->function_call_parameter_type(syntax_callback_context, SYNTAX_FUNCTION_CALL_PARAMETER_TYPE_STRING);
+            syntax_callback_functions->function_call_parameter_string(syntax_callback_context, &token->string_range);
             break;
         }
         case TOKEN_TYPE_LPAREN: {
-            syntax_callback_functions->function_call_parameter_type(syntax_callback_context, SYNTAX_FUNCTION_CALL_PARAMETER_TYPE_FUNCTION_CALL);
+            syntax_callback_functions->function_call_parameter_function_call(syntax_callback_context);
             syntax_function_call_with_name_yielded(lexic_analyzer, token, syntax_callback_functions, syntax_callback_context);
             break;
         }
@@ -351,6 +359,7 @@ static void syntax_statement_list(
             ASSERT(lexic_analyzer_yield_no_whitespace(lexic_analyzer, token));
             switch(token->type) {
                 case TOKEN_TYPE_KEYWORD_IF: {
+                    syntax_callback_functions->statement(syntax_callback_context, SYNTAX_STATEMENT_TYPE_IF);
                     syntax_callback_functions->if_begin(syntax_callback_context);
                     syntax_function_call_argument(lexic_analyzer, token, true, syntax_callback_functions, syntax_callback_context);
                     syntax_statement_list(lexic_analyzer, token, syntax_callback_functions, syntax_callback_context);
@@ -360,6 +369,7 @@ static void syntax_statement_list(
                     break;
                 }
                 case TOKEN_TYPE_KEYWORD_WHILE: {
+                    syntax_callback_functions->statement(syntax_callback_context, SYNTAX_STATEMENT_TYPE_WHILE);
                     syntax_callback_functions->while_begin(syntax_callback_context);
                     syntax_function_call_argument(lexic_analyzer, token, true, syntax_callback_functions, syntax_callback_context);
                     syntax_statement_list(lexic_analyzer, token, syntax_callback_functions, syntax_callback_context);
@@ -368,6 +378,8 @@ static void syntax_statement_list(
                     break;
                 }
                 case TOKEN_TYPE_KEYWORD_SET: {
+                    syntax_callback_functions->statement(syntax_callback_context, SYNTAX_STATEMENT_TYPE_SET);
+                    syntax_callback_functions->set_begin(syntax_callback_context);
                     ASSERT(lexic_analyzer_yield_no_whitespace(lexic_analyzer, token));
                     ASSERT_TOKEN(lexic_analyzer, token, TOKEN_TYPE_IDENTIFIER);
                     syntax_function_call_argument(lexic_analyzer, token, true, syntax_callback_functions, syntax_callback_context);
@@ -376,12 +388,15 @@ static void syntax_statement_list(
                     break;
                 }
                 case TOKEN_TYPE_KEYWORD_RETURN: {
+                    syntax_callback_functions->statement(syntax_callback_context, SYNTAX_STATEMENT_TYPE_RETURN);
+                    syntax_callback_functions->return_begin(syntax_callback_context);
                     syntax_function_call_argument(lexic_analyzer, token, true, syntax_callback_functions, syntax_callback_context);
                     ASSERT(lexic_analyzer_yield_no_whitespace(lexic_analyzer, token));
                     ASSERT_TOKEN(lexic_analyzer, token, TOKEN_TYPE_RPAREN);
                     break;
                 }
                 case TOKEN_TYPE_IDENTIFIER: {
+                    syntax_callback_functions->statement(syntax_callback_context, SYNTAX_STATEMENT_TYPE_FUNCTION_CALL);
                     syntax_callback_functions->function_call_begin(syntax_callback_context, &token->string_range);
                     syntax_function_call_arguments(lexic_analyzer, token, syntax_callback_functions, syntax_callback_context);
                     break;
@@ -451,8 +466,8 @@ typedef struct {
 } Range;
 
 #define SYNTAX_CALLBACK_FIELDS \
-    X(function_definition_parameters, struct { size_t identifier_index; SyntaxFunctionDefinitionParameterType type; }) \
     X(function_definitions, struct { StringRange name; Range parameter_range; size_t statement_list_index; }) \
+    X(function_definition_parameters, struct { size_t identifier_index; SyntaxFunctionDefinitionParameterType type; }) \
     X(statement_lists, Range) \
     X(statements, struct { size_t index; SyntaxStatementType type; }) \
     X(statement_ifs, struct { size_t function_call_parameter_index; size_t true_branch_statement_list_index; size_t false_branch_statement_list_index; }) \
@@ -477,8 +492,6 @@ typedef struct {
 static void syntax_callback_counter_function_definition_begin(SyntaxCallbackCounter data[static 1], const StringRange name[static 1]) {
     data->function_definitions++;
 }
-static void syntax_callback_counter_function_definition_parameter_list_begin(SyntaxCallbackCounter data[static 1]) {}
-static void syntax_callback_counter_function_definition_parameter_list_end(SyntaxCallbackCounter data[static 1]) {}
 static void syntax_callback_counter_function_definition_parameter_name(SyntaxCallbackCounter data[static 1], const StringRange name[static 1]) {
     data->function_definition_parameters++;
 }
@@ -486,22 +499,43 @@ static void syntax_callback_counter_function_definition_parameter_type(SyntaxCal
 static void syntax_callback_counter_statement_list_begin(SyntaxCallbackCounter data[static 1]) {
     data->statement_lists++;
 }
-static void syntax_callback_counter_function_call_begin(SyntaxCallbackCounter data[static 1], const StringRange name[static 1]) {
-    data->function_calls++;
+static void syntax_callback_counter_statement(SyntaxCallbackCounter data[static 1], const SyntaxStatementType type) {
+    data->statements++;
 }
-static void syntax_callback_counter_function_call_parameter_type(SyntaxCallbackCounter data[static 1], const SyntaxFunctionCallParameterType type) {
-    data->function_call_parameters++;
-}
-static void syntax_callback_counter_function_call_parameter_string_range(SyntaxCallbackCounter data[static 1], const StringRange string_range[static 1]) {}
 static void syntax_callback_counter_if_begin(SyntaxCallbackCounter data[static 1]) {
     data->statement_ifs++;
 }
 static void syntax_callback_counter_while_begin(SyntaxCallbackCounter data[static 1]) {
     data->statement_whiles++;
 }
+static void syntax_callback_counter_set_begin(SyntaxCallbackCounter data[static 1]) {
+    data->statement_sets++;
+}
+static void syntax_callback_counter_return_begin(SyntaxCallbackCounter data[static 1]) {
+    data->statement_returns++;
+}
+static void syntax_callback_counter_function_call_begin(SyntaxCallbackCounter data[static 1], const StringRange name[static 1]) {
+    data->function_calls++;
+}
+static void syntax_callback_counter_function_call_parameter_bool(SyntaxCallbackCounter data[static 1], const StringRange string_range[static 1]) {
+    data->function_call_parameters++;
+}
+static void syntax_callback_counter_function_call_parameter_int(SyntaxCallbackCounter data[static 1], const StringRange string_range[static 1]) {
+    data->function_call_parameters++;
+}
+static void syntax_callback_counter_function_call_parameter_float(SyntaxCallbackCounter data[static 1], const StringRange string_range[static 1]) {
+    data->function_call_parameters++;
+}
+static void syntax_callback_counter_function_call_parameter_string(SyntaxCallbackCounter data[static 1], const StringRange name[static 1]) {
+    data->function_call_parameters++;
+}
+static void syntax_callback_counter_function_call_parameter_function_call(SyntaxCallbackCounter data[static 1]) {
+    data->function_call_parameters++;
+}
+static void syntax_callback_counter_function_call_parameter_string_range(SyntaxCallbackCounter data[static 1], const StringRange string_range[static 1]) {}
 
 typedef struct {
-#define X(name, return_type, ...) return_type(*name)(SyntaxCallbackCounter context[static 1] __VA_OPT__(,) __VA_ARGS__);
+#define X(name, ...) void(*name)(SyntaxCallbackCounter context[static 1] __VA_OPT__(,) __VA_ARGS__);
     SYNTAX_CALLBACK_FUNCTIONS
 #undef X
 } SyntaxCallbackFunctionsCounter;
