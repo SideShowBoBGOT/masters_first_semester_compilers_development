@@ -17,9 +17,6 @@
 #include <time.h>
 #define STRINGIFY(...) #__VA_ARGS__
 
-#define ARRAY_COUNT(arr) (sizeof((arr)) / sizeof((arr)[0]))
-#define DYNAMIC_ARRAY_SIZE(arr) ((arr)->capacity * sizeof(*(arr)->data))
-#define DYNAMIC_ARRAY_ALLOC(arr) do { (arr)->data = malloc(DYNAMIC_ARRAY_SIZE(arr)); }while(0)
 
 #define ASSERT(expr, ...) \
     do {\
@@ -48,10 +45,13 @@
         fprintf(stderr, "]\n");\
     } while(0)
 
+#define ARRAY_COUNT(arr) (sizeof((arr)) / sizeof((arr)[0]))
+#define DYNAMIC_ARRAY_SIZE(arr) ((arr)->capacity * sizeof(*(arr)->data))
+
 #define TOKENS_MAP \
     X(LPAREN, "[(]")\
     X(RPAREN, "[)]")\
-    X(ELEMENT, "[\"\'\\a-zA-Z!$%&*/+-:<=>?^_~0-9]")\
+    X(ATOM, "[\"\'\\a-zA-Z!$%&*/+-:<=>?^_~0-9]")\
     X(NEWLINE, "\n")\
     X(SPACETAB, "[ \t]+")
 
@@ -192,9 +192,14 @@ typedef struct {
 } Range;
 
 typedef enum {
-    SYNTAX_ELEMENT_TYPE_LIST,
-    SYNTAX_ELEMENT_TYPE_ATOM,
-} SyntaxElementType;
+    SYNTAX_LIST_ELEMENT_TYPE_LIST,
+    SYNTAX_LIST_ELEMENT_TYPE_ATOM,
+} SyntaxListElementType;
+
+typedef struct {
+    SyntaxListElementType type;
+    size_t index;
+} SyntaxListElement;
 
 typedef struct {
     struct {
@@ -202,10 +207,7 @@ typedef struct {
         size_t capacity;
     } list_arr;
     struct {
-        struct {
-            SyntaxElementType type;
-            size_t index;
-        } *data;
+        SyntaxListElement *data;
         size_t capacity;
     } list_element_arr;
     struct {
@@ -214,7 +216,7 @@ typedef struct {
     } atom_arr;
 } SyntaxTree;
 
-static SyntaxTree* syntax_tree_init(LexicAnalyzer lexic_analyzer[static 1], Token token[static 1]) {
+static SyntaxTree syntax_tree_init(LexicAnalyzer lexic_analyzer[static 1], Token token[static 1]) {
     SyntaxTree syntax_tree = {.list_arr.capacity = 1};
     lexic_analyzer_reset(lexic_analyzer);
     size_t max_depth_index = 0;
@@ -223,7 +225,7 @@ static SyntaxTree* syntax_tree_init(LexicAnalyzer lexic_analyzer[static 1], Toke
         while(lexic_analyzer_yield_no_whitespace(lexic_analyzer, token)) {
             switch(token->type) {
                 case TOKEN_TYPE_LPAREN: {
-                    syntax_tree.element_arr.capacity++;
+                    syntax_tree.list_element_arr.capacity++;
                     depth_index++;
                     max_depth_index++;
                     syntax_tree.list_arr.capacity++;
@@ -234,8 +236,8 @@ static SyntaxTree* syntax_tree_init(LexicAnalyzer lexic_analyzer[static 1], Toke
                     depth_index--;
                     break;
                 }
-                case TOKEN_TYPE_ELEMENT: {
-                    syntax_tree.element_arr.capacity++;
+                case TOKEN_TYPE_ATOM: {
+                    syntax_tree.list_element_arr.capacity++;
                     syntax_tree.atom_arr.capacity++;
                     break;
                 }
@@ -245,17 +247,16 @@ static SyntaxTree* syntax_tree_init(LexicAnalyzer lexic_analyzer[static 1], Toke
             }
         }
     }
-    DYNAMIC_ARRAY_ALLOC(&syntax_tree.list_arr);
+    syntax_tree.list_arr.data = (Range*)calloc(syntax_tree.list_arr.capacity, sizeof(*syntax_tree.list_arr.data));
     memset(syntax_tree.list_arr.data, 0, DYNAMIC_ARRAY_SIZE(&syntax_tree.list_arr));
-    DYNAMIC_ARRAY_ALLOC(&syntax_tree.list_element_arr);
-    DYNAMIC_ARRAY_ALLOC(&syntax_tree.atom_arr);
-
-    size_t *const list_index_arr = calloc(max_depth_index + 1, sizeof(size_t));
+    syntax_tree.list_element_arr.data = (SyntaxListElement*)calloc(syntax_tree.list_element_arr.capacity, sizeof(*syntax_tree.list_element_arr.data));
+    syntax_tree.atom_arr.data = (StringRange*)calloc(syntax_tree.atom_arr.capacity, sizeof(*syntax_tree.atom_arr.data));
+    size_t *const list_index_arr = (size_t*)calloc(max_depth_index + 1, sizeof(size_t));
     {
         lexic_analyzer_reset(lexic_analyzer);
         size_t depth_index = 0;
         size_t list_index = 0;
-        size_t list_element_index = 0;
+        size_t atom_index = 0;
         list_index_arr[depth_index] = list_index;
         while(lexic_analyzer_yield_no_whitespace(lexic_analyzer, token)) {
             switch(token->type) {
@@ -270,8 +271,9 @@ static SyntaxTree* syntax_tree_init(LexicAnalyzer lexic_analyzer[static 1], Toke
                     depth_index--;
                     break;
                 }
-                case TOKEN_TYPE_ELEMENT: {
+                case TOKEN_TYPE_ATOM: {
                     syntax_tree.list_arr.data[list_index_arr[depth_index]].count++;
+                    syntax_tree.atom_arr.data[atom_index++] = token->string_range;
                     break;
                 }
                 default: {
@@ -290,32 +292,38 @@ static SyntaxTree* syntax_tree_init(LexicAnalyzer lexic_analyzer[static 1], Toke
     {
         lexic_analyzer_reset(lexic_analyzer);
         size_t depth_index = 0;
-        size_t list_index = 0;
-        list_index_arr[depth_index] = list_index;
-        size_t *const list_count_arr = calloc(list_arr_capacity, sizeof(size_t));
+        size_t sequential_list_index = 0;
+        size_t sequential_atom_index = 0;
+        list_index_arr[depth_index] = sequential_list_index;
+        size_t *const list_count_arr = (size_t*)calloc(syntax_tree.list_arr.capacity, sizeof(size_t));
         ASSERT(list_count_arr);
-        memset(list_count_arr, 0, list_arr_capacity);
+        memset(list_count_arr, 0, syntax_tree.list_arr.capacity);
         while(lexic_analyzer_yield_no_whitespace(lexic_analyzer, token)) {
             switch(token->type) {
                 case TOKEN_TYPE_LPAREN: {
                     {
                         const size_t list_index = list_index_arr[depth_index]; 
-                        syntax_tree.list_element_arr[list_arr[list_index].offset + list_count_arr[list_index]] = token->string_range;
+                        const size_t list_element_index = syntax_tree.list_arr.data[list_index].offset + list_count_arr[list_index];
+                        syntax_tree.list_element_arr.data[list_element_index] = (SyntaxListElement){.index=sequential_list_index, .type=SYNTAX_LIST_ELEMENT_TYPE_LIST};
                         list_count_arr[list_index]++;
                     }
-                    list_index++;
+                    sequential_list_index++;
                     depth_index++;
-                    list_index_arr[depth_index] = list_index; 
+                    list_index_arr[depth_index] = sequential_list_index; 
                     break;
                 }
                 case TOKEN_TYPE_RPAREN: {
                     depth_index--;
                     break;
                 }
-                case TOKEN_TYPE_ELEMENT: {
-                    const size_t list_index = list_index_arr[depth_index]; 
-                    element_arr[list_arr[list_index].offset + list_count_arr[list_index]] = token->string_range;
-                    list_count_arr[list_index]++;
+                case TOKEN_TYPE_ATOM: {
+                    {
+                        const size_t list_index = list_index_arr[depth_index]; 
+                        const size_t list_element_index = syntax_tree.list_arr.data[list_index].offset + list_count_arr[list_index];
+                        syntax_tree.list_element_arr.data[list_element_index] = (SyntaxListElement){.index=sequential_atom_index, .type=SYNTAX_LIST_ELEMENT_TYPE_ATOM};
+                        list_count_arr[list_index]++;
+                    }
+                    sequential_atom_index++;
                     break;
                 }
                 default: {
@@ -325,12 +333,9 @@ static SyntaxTree* syntax_tree_init(LexicAnalyzer lexic_analyzer[static 1], Toke
         }
         free(list_count_arr);
     }
+    free(list_index_arr);
+    return syntax_tree;
 }
-
-typedef struct {
-    size_t offset;
-    size_t count;
-} Range;
 
 int main(const int argc, const char *argv[]) {
     ASSERT(argc == 2);
@@ -344,7 +349,25 @@ int main(const int argc, const char *argv[]) {
     data[stat.st_size] = 0;
     ASSERT_NOT_MINUS_ONE(close(fd));
     
-    
+    LexicAnalyzer lexic_analyzer;
+    lexic_analyzer_init(&lexic_analyzer, data);
+        Token token;
+        while(lexic_analyzer_yield(&lexic_analyzer, &token)) {
+            LOG_DEBUG_TOKEN_NAME(lexic_analyzer, token);
+        }
+        lexic_analyzer_reset(&lexic_analyzer);
+
+        syntax_tree_init(&lexic_analyzer, &token);
+        // LOG_DEBUG("function_definition_parameter_count: %lu", syntax_callback_counter.function_definition_parameter_count);
+        // LOG_DEBUG("function_definition_count: %lu", syntax_callback_counter.function_definition_count);
+        // LOG_DEBUG("statement_list_count: %lu", syntax_callback_counter.statement_list_count);
+        // LOG_DEBUG("statement_count: %lu", syntax_callback_counter.statement_count);
+        // LOG_DEBUG("function_call_count: %lu", syntax_callback_counter.function_call_count);
+        // LOG_DEBUG("function_call_parameter_count: %lu", syntax_callback_counter.function_call_parameter_count);
+        // LOG_DEBUG("if_count: %lu", syntax_callback_counter.if_count);
+        // LOG_DEBUG("while_count: %lu", syntax_callback_counter.while_count);
+
+    lexic_analyzer_deinit(&lexic_analyzer);
     
 
     free(data);
