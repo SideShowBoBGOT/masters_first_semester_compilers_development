@@ -15,8 +15,9 @@
 #include <limits.h>
 #include <regex.h>
 #include <time.h>
-#define STRINGIFY(...) #__VA_ARGS__
 
+#define STRINGIFY(...) #__VA_ARGS__
+#define PRINTFLN(str, ...) printf(str "\n" __VA_OPT__(,) __VA_ARGS__)
 
 #define ASSERT(expr, ...) \
     do {\
@@ -51,7 +52,7 @@
 #define TOKENS_MAP \
     X(LPAREN, "[(]")\
     X(RPAREN, "[)]")\
-    X(ATOM, "[\"\'\\a-zA-Z!$%&*/+-:<=>?^_~0-9]")\
+    X(ATOM, "[\\a-zA-Z!$%&*/+-:<=>?^_~0-9]+|\"[^\"]*\"")\
     X(NEWLINE, "\n")\
     X(SPACETAB, "[ \t]+")
 
@@ -216,6 +217,8 @@ typedef struct {
     } atom_arr;
 } SyntaxTree;
 
+
+
 static SyntaxTree syntax_tree_init(LexicAnalyzer lexic_analyzer[static 1], Token token[static 1]) {
     SyntaxTree syntax_tree = {.list_arr.capacity = 1};
     lexic_analyzer_reset(lexic_analyzer);
@@ -301,13 +304,13 @@ static SyntaxTree syntax_tree_init(LexicAnalyzer lexic_analyzer[static 1], Token
         while(lexic_analyzer_yield_no_whitespace(lexic_analyzer, token)) {
             switch(token->type) {
                 case TOKEN_TYPE_LPAREN: {
+                    sequential_list_index++;
                     {
                         const size_t list_index = list_index_arr[depth_index]; 
                         const size_t list_element_index = syntax_tree.list_arr.data[list_index].offset + list_count_arr[list_index];
                         syntax_tree.list_element_arr.data[list_element_index] = (SyntaxListElement){.index=sequential_list_index, .type=SYNTAX_LIST_ELEMENT_TYPE_LIST};
                         list_count_arr[list_index]++;
                     }
-                    sequential_list_index++;
                     depth_index++;
                     list_index_arr[depth_index] = sequential_list_index; 
                     break;
@@ -334,7 +337,44 @@ static SyntaxTree syntax_tree_init(LexicAnalyzer lexic_analyzer[static 1], Token
         free(list_count_arr);
     }
     free(list_index_arr);
+    syntax_tree_print(&syntax_tree, lexic_analyzer->str);
+
+
+
     return syntax_tree;
+}
+
+static void syntax_tree_print(const SyntaxTree syntax_tree[static 1], const char data[]) {
+    LOG_DEBUG("syntax_tree->list_arr.capacity: %lu", syntax_tree->list_arr.capacity);
+    LOG_DEBUG("syntax_tree->list_element_arr.capacity: %lu", syntax_tree->list_element_arr.capacity);
+    LOG_DEBUG("syntax_tree->atom_arr.capacity: %lu", syntax_tree->atom_arr.capacity);
+    PRINTFLN("Atoms:");
+    for(size_t i = 0; i < syntax_tree->atom_arr.capacity; ++i) {
+        const StringRange *const atom = &syntax_tree->atom_arr.data[i];
+        PRINTFLN("\tElement Atom %lu: %.*s", i, atom->end - atom->start, data + atom->start);
+    }
+    for(size_t i = 0; i < syntax_tree->list_arr.capacity; ++i) {
+        PRINTFLN("List %lu:", i);
+        const Range *const list = &syntax_tree->list_arr.data[i];
+        for(size_t j = 0; j < list->count; ++j) {
+            const size_t list_element_index = list->offset + j;  
+            const SyntaxListElement *const list_element = &syntax_tree->list_element_arr.data[list_element_index];
+            switch(list_element->type) {
+                case SYNTAX_LIST_ELEMENT_TYPE_ATOM: {
+                    const StringRange *const atom = &syntax_tree->atom_arr.data[list_element->index];
+                    PRINTFLN("\tElement Atom %lu: %.*s", list_element->index, atom->end - atom->start, data + atom->start);
+                    break;
+                }
+                case SYNTAX_LIST_ELEMENT_TYPE_LIST: {
+                    PRINTFLN("\tElement List %lu", list_element->index);
+                    break;
+                }
+                default: {
+                    ASSERT(false);
+                }
+            }
+        }
+    }
 }
 
 int main(const int argc, const char *argv[]) {
@@ -357,16 +397,7 @@ int main(const int argc, const char *argv[]) {
         }
         lexic_analyzer_reset(&lexic_analyzer);
 
-        syntax_tree_init(&lexic_analyzer, &token);
-        // LOG_DEBUG("function_definition_parameter_count: %lu", syntax_callback_counter.function_definition_parameter_count);
-        // LOG_DEBUG("function_definition_count: %lu", syntax_callback_counter.function_definition_count);
-        // LOG_DEBUG("statement_list_count: %lu", syntax_callback_counter.statement_list_count);
-        // LOG_DEBUG("statement_count: %lu", syntax_callback_counter.statement_count);
-        // LOG_DEBUG("function_call_count: %lu", syntax_callback_counter.function_call_count);
-        // LOG_DEBUG("function_call_parameter_count: %lu", syntax_callback_counter.function_call_parameter_count);
-        // LOG_DEBUG("if_count: %lu", syntax_callback_counter.if_count);
-        // LOG_DEBUG("while_count: %lu", syntax_callback_counter.while_count);
-
+        const SyntaxTree syntax_tree = syntax_tree_init(&lexic_analyzer, &token);
     lexic_analyzer_deinit(&lexic_analyzer);
     
 
