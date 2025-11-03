@@ -18,6 +18,8 @@
 #define STRINGIFY(...) #__VA_ARGS__
 
 #define ARRAY_COUNT(arr) (sizeof((arr)) / sizeof((arr)[0]))
+#define DYNAMIC_ARRAY_SIZE(arr) ((arr)->capacity * sizeof(*(arr)->data))
+#define DYNAMIC_ARRAY_ALLOC(arr) do { (arr)->data = malloc(DYNAMIC_ARRAY_SIZE(arr)); }while(0)
 
 #define ASSERT(expr, ...) \
     do {\
@@ -184,56 +186,144 @@ static bool lexic_analyzer_yield_no_whitespace(LexicAnalyzer lexic_analyzer[stat
         ASSERT(_found, "Expected tokens `" STRINGIFY(__VA_ARGS__) "', but got: %s. Position %d:%d", token_type_str((token)->type), lexic_analyzer->newline_index, lexic_analyzer->offset - lexic_analyzer->newline_offset);\
     } while(0)
 
+typedef struct {
+    size_t offset;
+    size_t count;
+} Range;
+
 typedef enum {
-    SYNTAX_ANALYZER_STATE_BEGIN,
-    SYNTAX_ANALYZER_STATE_LOOP,
-    SYNTAX_ANALYZER_STATE_END,
-} SyntaxAnalyzerState;
+    SYNTAX_ELEMENT_TYPE_LIST,
+    SYNTAX_ELEMENT_TYPE_ATOM,
+} SyntaxElementType;
 
 typedef struct {
-    SyntaxAnalyzerState state;
-    size_t depth;
-} SyntaxAnalyzer;
+    struct {
+        Range *data;
+        size_t capacity;
+    } list_arr;
+    struct {
+        struct {
+            SyntaxElementType type;
+            size_t index;
+        } *data;
+        size_t capacity;
+    } list_element_arr;
+    struct {
+        StringRange *data;
+        size_t capacity;
+    } atom_arr;
+} SyntaxTree;
 
-static bool syntax_yield(SyntaxAnalyzer syntax_analyzer[static 1], LexicAnalyzer lexic_analyzer[static 1], Token token[static 1]) {
-    switch(syntax_analyzer->state) {
-        case SYNTAX_ANALYZER_STATE_BEGIN: {
-            lexic_analyzer_reset(lexic_analyzer);
-            ASSERT(lexic_analyzer_yield_no_whitespace(lexic_analyzer, token));
-            ASSERT_TOKEN(lexic_analyzer, token, TOKEN_TYPE_LPAREN);
-            syntax_analyzer->depth = 1;
-            return true;
-        }
-        case SYNTAX_ANALYZER_STATE_LOOP: {
-            if(lexic_analyzer_yield_no_whitespace(lexic_analyzer, token)) {
-                switch(token->type) {
-                    case TOKEN_TYPE_LPAREN: {
-                        syntax_analyzer->depth++;
-                        break;
-                    }
-                    case TOKEN_TYPE_RPAREN: {
-                        ASSERT(syntax_analyzer->depth != 0, "Unmatched paren. Position %d:%d", lexic_analyzer->newline_index, lexic_analyzer->offset - lexic_analyzer->newline_offset);
-                        syntax_analyzer->depth--;
-                        break;
-                    }
-                    case TOKEN_TYPE_ELEMENT: {
-                        break;
-                    }
-                    default: {
-                        ASSERT(false);
-                    }
+static SyntaxTree* syntax_tree_init(LexicAnalyzer lexic_analyzer[static 1], Token token[static 1]) {
+    SyntaxTree syntax_tree = {.list_arr.capacity = 1};
+    lexic_analyzer_reset(lexic_analyzer);
+    size_t max_depth_index = 0;
+    {
+        size_t depth_index = 0;
+        while(lexic_analyzer_yield_no_whitespace(lexic_analyzer, token)) {
+            switch(token->type) {
+                case TOKEN_TYPE_LPAREN: {
+                    syntax_tree.element_arr.capacity++;
+                    depth_index++;
+                    max_depth_index++;
+                    syntax_tree.list_arr.capacity++;
+                    break;
                 }
-                return true;
-            } else {
-                return false;
+                case TOKEN_TYPE_RPAREN: {
+                    ASSERT(depth_index != 0, "Unmatched paren. Position %d:%d", lexic_analyzer->newline_index, lexic_analyzer->offset - lexic_analyzer->newline_offset);
+                    depth_index--;
+                    break;
+                }
+                case TOKEN_TYPE_ELEMENT: {
+                    syntax_tree.element_arr.capacity++;
+                    syntax_tree.atom_arr.capacity++;
+                    break;
+                }
+                default: {
+                    ASSERT(false);
+                }
             }
         }
-        case SYNTAX_ANALYZER_STATE_END: {
-            return false;
+    }
+    DYNAMIC_ARRAY_ALLOC(&syntax_tree.list_arr);
+    memset(syntax_tree.list_arr.data, 0, DYNAMIC_ARRAY_SIZE(&syntax_tree.list_arr));
+    DYNAMIC_ARRAY_ALLOC(&syntax_tree.list_element_arr);
+    DYNAMIC_ARRAY_ALLOC(&syntax_tree.atom_arr);
+
+    size_t *const list_index_arr = calloc(max_depth_index + 1, sizeof(size_t));
+    {
+        lexic_analyzer_reset(lexic_analyzer);
+        size_t depth_index = 0;
+        size_t list_index = 0;
+        size_t list_element_index = 0;
+        list_index_arr[depth_index] = list_index;
+        while(lexic_analyzer_yield_no_whitespace(lexic_analyzer, token)) {
+            switch(token->type) {
+                case TOKEN_TYPE_LPAREN: {
+                    syntax_tree.list_arr.data[list_index_arr[depth_index]].count++;
+                    list_index++;
+                    depth_index++;
+                    list_index_arr[depth_index] = list_index; 
+                    break;
+                }
+                case TOKEN_TYPE_RPAREN: {
+                    depth_index--;
+                    break;
+                }
+                case TOKEN_TYPE_ELEMENT: {
+                    syntax_tree.list_arr.data[list_index_arr[depth_index]].count++;
+                    break;
+                }
+                default: {
+                    ASSERT(false);
+                }
+            }
         }
-        default: {
-            ASSERT(false);
+    }
+    {
+        size_t cumulative_offset = 0;
+        for(size_t i = 0; i < syntax_tree.list_arr.capacity; ++i) {
+            syntax_tree.list_arr.data[i].offset = cumulative_offset;
+            cumulative_offset += syntax_tree.list_arr.data[i].count;
         }
+    }
+    {
+        lexic_analyzer_reset(lexic_analyzer);
+        size_t depth_index = 0;
+        size_t list_index = 0;
+        list_index_arr[depth_index] = list_index;
+        size_t *const list_count_arr = calloc(list_arr_capacity, sizeof(size_t));
+        ASSERT(list_count_arr);
+        memset(list_count_arr, 0, list_arr_capacity);
+        while(lexic_analyzer_yield_no_whitespace(lexic_analyzer, token)) {
+            switch(token->type) {
+                case TOKEN_TYPE_LPAREN: {
+                    {
+                        const size_t list_index = list_index_arr[depth_index]; 
+                        syntax_tree.list_element_arr[list_arr[list_index].offset + list_count_arr[list_index]] = token->string_range;
+                        list_count_arr[list_index]++;
+                    }
+                    list_index++;
+                    depth_index++;
+                    list_index_arr[depth_index] = list_index; 
+                    break;
+                }
+                case TOKEN_TYPE_RPAREN: {
+                    depth_index--;
+                    break;
+                }
+                case TOKEN_TYPE_ELEMENT: {
+                    const size_t list_index = list_index_arr[depth_index]; 
+                    element_arr[list_arr[list_index].offset + list_count_arr[list_index]] = token->string_range;
+                    list_count_arr[list_index]++;
+                    break;
+                }
+                default: {
+                    ASSERT(false);
+                }
+            }
+        }
+        free(list_count_arr);
     }
 }
 
