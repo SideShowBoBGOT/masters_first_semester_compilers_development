@@ -411,43 +411,58 @@ static SyntaxTree syntax_tree_init(LexicAnalyzer lexic_analyzer[static 1], Token
 
     AtomTypeRegexes atom_type_regexes = {0};
     atom_type_regexes_init(&atom_type_regexes);
-    
 
         const Range *const global_scope_list = &syntax_tree.list_arr.data[0];
         for(size_t global_scope_list_el_index = 0; global_scope_list_el_index < global_scope_list->count; ++global_scope_list_el_index) {
-            const SyntaxListElement *const fn_def_list_el = &syntax_tree.list_element_arr.data[global_scope_list_el_index];
-            ASSERT(fn_def_list_el->type == SYNTAX_LIST_ELEMENT_TYPE_LIST);
-            const Range *const fn_def_list = &syntax_tree.list_arr.data[fn_def_list_el->index];
+            const SyntaxListElement *const global_scope_list_el = &syntax_tree.list_element_arr.data[global_scope_list_el_index];
+            ASSERT(global_scope_list_el->type == SYNTAX_LIST_ELEMENT_TYPE_LIST);
+            const Range *const fn_def_list = &syntax_tree.list_arr.data[global_scope_list_el->index];
             ASSERT(fn_def_list->count == 4);
 
-            const SyntaxListElement *list_el = &syntax_tree.list_element_arr.data[fn_def_list->offset + 0];
-            ASSERT(list_el->type == SYNTAX_LIST_ELEMENT_TYPE_ATOM);
+            const SyntaxListElement * fn_def_list_el = &syntax_tree.list_element_arr.data[fn_def_list->offset];
+            ASSERT(fn_def_list_el->type == SYNTAX_LIST_ELEMENT_TYPE_ATOM);
 
             regmatch_t regmatch = {0};
-            ASSERT(regexec(&atom_type_regexes.FN, lexic_analyzer->str + syntax_tree.atom_arr.data[list_el->index].start, 1, &regmatch, 0) != REG_NOMATCH);
+            ASSERT(regexec(&atom_type_regexes.FN, lexic_analyzer->str + syntax_tree.atom_arr.data[fn_def_list_el->index].start, 1, &regmatch, 0) != REG_NOMATCH);
             ASSERT(regmatch.rm_so == 0);
-            ASSERT((regmatch.rm_eo - regmatch.rm_so) == (syntax_tree.atom_arr.data[list_el->index].end - syntax_tree.atom_arr.data[list_el->index].start)); 
-            LOG_DEBUG("AHAHAH");
+            ASSERT((regmatch.rm_eo - regmatch.rm_so) == (syntax_tree.atom_arr.data[fn_def_list_el->index].end - syntax_tree.atom_arr.data[fn_def_list_el->index].start)); 
 
-            // atom_type_regexes.FN
-            // lexic_analyzer->str + 
-            // syntax_tree.atom_arr.data[list_el->index]
-            // syntax_tree.atom_arr.data[list_el->index]
-            // ASSERT(list_el->type == SYNTAX_LIST_ELEMENT_TYPE_ATOM);
-            // syntax_tree.atom_arr.data[]
-            //
-            // size_t fn_def_list_el_index = 0;
-            // for( fn_def_list_el_index < fn_def_list->count; ++fn_def_list_el_index) {
-            //
-            // }
-            // fn_def_list->
-            //
-            // syntax_tree.list_arr.data[syntax_tree.list_element_arr.data[i].index]
+            // function definition name
+            fn_def_list_el++;
+            ASSERT(fn_def_list_el->type == SYNTAX_LIST_ELEMENT_TYPE_ATOM);
+            ASSERT(regexec(&atom_type_regexes.IDENTIFIER, lexic_analyzer->str + syntax_tree.atom_arr.data[fn_def_list_el->index].start, 1, &regmatch, 0) != REG_NOMATCH);
+            ASSERT(regmatch.rm_so == 0);
+            ASSERT((regmatch.rm_eo - regmatch.rm_so) == (syntax_tree.atom_arr.data[fn_def_list_el->index].end - syntax_tree.atom_arr.data[fn_def_list_el->index].start)); 
+
+            // function definition param list
+            fn_def_list_el++;
+            ASSERT(fn_def_list_el->type == SYNTAX_LIST_ELEMENT_TYPE_LIST);
+            {
+                const Range *const fn_def_param_list = &syntax_tree.list_arr.data[fn_def_list_el->index];
+                for(size_t fn_def_param_list_el_index = 0; fn_def_param_list_el_index < fn_def_param_list->count; ++fn_def_param_list_el_index) {
+                    const SyntaxListElement *const fn_def_param_list_el = &syntax_tree.list_element_arr.data[fn_def_param_list->offset];
+                    ASSERT(fn_def_param_list_el->type == SYNTAX_LIST_ELEMENT_TYPE_LIST);
+                    const Range *const id_type_list = &syntax_tree.list_arr.data[fn_def_param_list_el->index];
+                    ASSERT(id_type_list->count == 2);
+                    // const SyntaxListElement *id_type_list_element = &syntax_tree.list_element_arr.data[id_type_list->offset];
+                    // ASSERT(id_type_list_element->type == SYNTAX_LIST_ELEMENT_TYPE_ATOM);
+                    // syntax_tree.atom_arr.data[id_type_list_element->index]
+                    //
+                    // id_type_list_element++;
+                    // ASSERT(id_type_list_element->type == SYNTAX_LIST_ELEMENT_TYPE_ATOM);
+                }
+            }
+            fn_def_list_el++;
+            ASSERT(fn_def_list_el->type == SYNTAX_LIST_ELEMENT_TYPE_LIST);
+            {
+                const Range *const fn_def_statement_list = &syntax_tree.list_arr.data[fn_def_list_el->index];
+                LOG_DEBUG("index: %lu", fn_def_list_el->index);
+                for(size_t fn_def_statement_list_el_index = 0; fn_def_statement_list_el_index < fn_def_statement_list->count; ++fn_def_statement_list_el_index) {
+                    const SyntaxListElement *const fn_def_statement_list_el = &syntax_tree.list_element_arr.data[fn_def_statement_list->offset];
+                    ASSERT(fn_def_statement_list_el->type == SYNTAX_LIST_ELEMENT_TYPE_LIST);
+                }
+            }
         }
-        // Range *const list = &syntax_tree.list_arr.data[i];
-        // for(size_t i = 0; i < syntax_tree.list_arr.capacity; ++i) {
-        // }
-
     atom_type_regexes_deinit(&atom_type_regexes);
     return syntax_tree;
 }
