@@ -246,9 +246,10 @@ static void syntax_tree_print(const SyntaxTree syntax_tree[static 1], const char
 
 #define ATOM_PATTERNS\
     X(FN, "fn")\
-    X(WHILE, "while")\
-    X(IF, "fn")\
-    X(SET, "fn")\
+    X(STATEMENT_WHILE, "while")\
+    X(STATEMENT_IF, "if")\
+    X(STATEMENT_SET, "set")\
+    X(STATEMENT_RETURN, "return")\
     X(TYPE_INT, "int")\
     X(TYPE_FLOAT, "float")\
     X(TYPE_STRING, "string")\
@@ -287,25 +288,31 @@ static void atom_type_regexes_deinit(AtomTypeRegexes atom_type_regexes[static 1]
 //     const StringRange *atom_arr;
 // } AtomAsserter;
 
-static void assert_atom_regex(const char data[], const StringRange atom_arr[], const SyntaxListElement list_el[static 1], const size_t regexes_count, const regex_t *const regexes[], const char file[], const int line, const char function[]) {
+#define ASSERT_REGMATCH_ATOM_X(regmatch, atom, file, line, function)\
+    do {\
+        ASSERT_X((regmatch).rm_so == 0, (file), (line), (function));\
+        ASSERT_X(((regmatch).rm_eo - (regmatch).rm_so) == ((atom)->end - (atom)->start), (file), (line), (function));\
+    } while(0)
+    
+#define ASSERT_REGMATCH_ATOM(regmatch, atom) ASSERT_REGMATCH_ATOM_X((regmatch), (atom), __FILE__, __LINE__, __FUNCTION__)
+
+static void assert_atom_regex(const char program_text[], const StringRange atom_arr[], const SyntaxListElement list_el[static 1], const size_t regexes_count, const regex_t *const regexes[], const char file[], const int line, const char function[]) {
     regmatch_t regmatch;
     ASSERT_X(list_el->type == SYNTAX_LIST_ELEMENT_TYPE_ATOM, file, line, function);
     const StringRange *const atom = &atom_arr[list_el->index];
-    bool found = false;
     for(size_t i = 0; i < regexes_count; ++i) {
-        // LOG_DEBUG("%.*s", atom->end - atom->start, data + atom->start);
+        // LOG_DEBUG("%.*s", atom->end - atom->start, program_text + atom->start);
         // LOG_DEBUG("index: %lu", i);
-        if(regexec(regexes[i], data + atom->start, 1, &regmatch, 0) != REG_NOMATCH) {
-            ASSERT_X(found == false, file, line, function);
-            found = true;
-            ASSERT_X(regmatch.rm_so == 0, file, line, function);
-            ASSERT_X((regmatch.rm_eo - regmatch.rm_so) == (atom->end - atom->start), file, line, function); 
+        if(regexec(regexes[i], program_text + atom->start, 1, &regmatch, 0) != REG_NOMATCH) {
+            ASSERT_REGMATCH_ATOM_X(regmatch, atom, file, line, function);
+            return;
         }
     }
-    ASSERT_X(found, file, line, function);
+    ASSERT(false);
 }
 
 static SyntaxTree syntax_tree_init(LexicAnalyzer lexic_analyzer[static 1], Token token[static 1]) {
+    const char *const program_text = lexic_analyzer->str;
     SyntaxTree syntax_tree = {.list_arr.capacity = 1};
     lexic_analyzer_reset(lexic_analyzer);
     size_t max_depth_index = 0;
@@ -468,9 +475,29 @@ static SyntaxTree syntax_tree_init(LexicAnalyzer lexic_analyzer[static 1], Token
                 const Range *const fn_def_statement_list = &syntax_tree.list_arr.data[fn_def_list_el->index];
                 LOG_DEBUG("index: %lu", fn_def_list_el->index);
                 for(size_t fn_def_statement_list_el_index = 0; fn_def_statement_list_el_index < fn_def_statement_list->count; ++fn_def_statement_list_el_index) {
-                    const SyntaxListElement *const fn_def_statement_list_el = &syntax_tree.list_element_arr.data[fn_def_statement_list->offset];
+                    const SyntaxListElement *const fn_def_statement_list_el = &syntax_tree.list_element_arr.data[fn_def_statement_list->offset + fn_def_statement_list_el_index];
                     ASSERT(fn_def_statement_list_el->type == SYNTAX_LIST_ELEMENT_TYPE_LIST);
+                    const Range *const fn_def_statement = &syntax_tree.list_arr.data[fn_def_statement_list_el->index];
+                    ASSERT(fn_def_statement->count > 0);
+                    const SyntaxListElement *fn_def_statement_el = &syntax_tree.list_element_arr.data[fn_def_statement->offset];
+                    ASSERT(fn_def_statement_el->type == SYNTAX_LIST_ELEMENT_TYPE_ATOM);
+                    const StringRange *const fn_def_statement_head = &syntax_tree.atom_arr.data[fn_def_statement_el->index];
 
+                    regmatch_t regmatch = {0};
+                    if(regexec(&atom_type_regexes.STATEMENT_IF, program_text + fn_def_statement_head->start, 1, &regmatch, 0) != REG_NOMATCH) {
+                        ASSERT_REGMATCH_ATOM(regmatch, fn_def_statement_head);
+                    } else if(regexec(&atom_type_regexes.STATEMENT_WHILE, program_text + fn_def_statement_head->start, 1, &regmatch, 0) != REG_NOMATCH) {
+                        ASSERT_REGMATCH_ATOM(regmatch, fn_def_statement_head);
+                    } else if(regexec(&atom_type_regexes.STATEMENT_SET, program_text + fn_def_statement_head->start, 1, &regmatch, 0) != REG_NOMATCH) {
+                        ASSERT_REGMATCH_ATOM(regmatch, fn_def_statement_head);
+                    } else if(regexec(&atom_type_regexes.STATEMENT_RETURN, program_text + fn_def_statement_head->start, 1, &regmatch, 0) != REG_NOMATCH) {
+                        ASSERT_REGMATCH_ATOM(regmatch, fn_def_statement_head);
+                    } else if(regexec(&atom_type_regexes.IDENTIFIER, program_text + fn_def_statement_head->start, 1, &regmatch, 0) != REG_NOMATCH) {
+                        ASSERT_REGMATCH_ATOM(regmatch, fn_def_statement_head);
+
+                    } else {
+                        ASSERT(false);
+                    }
                 }
             }
         }
