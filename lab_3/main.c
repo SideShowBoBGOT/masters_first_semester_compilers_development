@@ -19,21 +19,23 @@
 #define STRINGIFY(...) #__VA_ARGS__
 #define PRINTFLN(str, ...) printf(str "\n" __VA_OPT__(,) __VA_ARGS__)
 
-#define ASSERT(expr, ...) \
+#define ASSERT_X(expr, file, line, function, ...)\
     do {\
         if(!(expr)) {\
-            fprintf(stderr, "%s:%d: %s: Assertion `%s' failed", __FILE__, __LINE__, __FUNCTION__, #expr);\
-            __VA_OPT__(fprintf(stderr, " explanation: " __VA_ARGS__);)\
+            fprintf(stderr, "%s:%d: %s: Assertion `%s' failed.", (file), (line), (function), #expr);\
+            __VA_OPT__(fprintf(stderr, " " __VA_ARGS__);)\
             fprintf(stderr, "\n");\
             abort();\
         }\
     } while(0)
 
+#define ASSERT(expr, ...) ASSERT_X(expr, __FILE__, __LINE__, __FUNCTION__ __VA_OPT__(,) __VA_ARGS__)
+    
 #define ASSERT_NOT_MINUS_ONE(expr, ...) \
     do {\
         if((expr) == -1) {\
-            fprintf(stderr, "%s:%d: %s: errno: %d: strerror: %s: Assertion `%s' failed", __FILE__, __LINE__, __FUNCTION__, errno, strerror(errno), #expr);\
-            __VA_OPT__(fprintf(stderr, " explanation: " __VA_ARGS__);)\
+            fprintf(stderr, "%s:%d: %s: errno: %d: strerror: %s: Assertion `%s' failed.", __FILE__, __LINE__, __FUNCTION__, errno, strerror(errno), #expr);\
+            __VA_OPT__(fprintf(stderr, " " __VA_ARGS__);)\
             fprintf(stderr, "\n");\
             abort();\
         }\
@@ -179,14 +181,6 @@ static bool lexic_analyzer_yield_no_whitespace(LexicAnalyzer lexic_analyzer[stat
     return false;
 }
 
-#define ASSERT_TOKEN(lexic_analyzer, token, ...)\
-    do {\
-        const TokenType _valid_token_types[] = {__VA_ARGS__};\
-        bool _found = false;\
-        for(uint8_t _i = 0; _i < ARRAY_COUNT(_valid_token_types); ++_i) { _found |= (token)->type == _valid_token_types[_i]; }\
-        ASSERT(_found, "Expected tokens `" STRINGIFY(__VA_ARGS__) "', but got: %s. Position %d:%d", token_type_str((token)->type), lexic_analyzer->newline_index, lexic_analyzer->offset - lexic_analyzer->newline_offset);\
-    } while(0)
-
 typedef struct {
     size_t offset;
     size_t count;
@@ -288,6 +282,26 @@ static void atom_type_regexes_deinit(AtomTypeRegexes atom_type_regexes[static 1]
     #undef X
 }
 
+// typedef struct {
+//     const char *data;
+//     const StringRange *atom_arr;
+// } AtomAsserter;
+
+static void assert_atom_regex(const char data[], const StringRange atom_arr[], const SyntaxListElement list_el[static 1], const size_t regexes_count, const regex_t *const regexes[], const char file[], const int line, const char function[]) {
+    regmatch_t regmatch;
+    ASSERT_X(list_el->type == SYNTAX_LIST_ELEMENT_TYPE_ATOM, file, line, function);
+    const StringRange *const atom = &atom_arr[list_el->index];
+    bool found = false;
+    for(size_t i = 0; i < regexes_count; ++i) {
+        ASSERT_X(found == false, file, line, function);
+        if(regexec(regexes[i], data + atom->start, 1, &regmatch, 0) != REG_NOMATCH) {
+            found = true;
+            ASSERT_X(regmatch.rm_so == 0, file, line, function);
+            ASSERT_X((regmatch.rm_eo - regmatch.rm_so) == (atom->end - atom->start), file, line, function); 
+        }
+    }
+    ASSERT_X(found, file, line, function);
+}
 
 static SyntaxTree syntax_tree_init(LexicAnalyzer lexic_analyzer[static 1], Token token[static 1]) {
     SyntaxTree syntax_tree = {.list_arr.capacity = 1};
@@ -412,6 +426,8 @@ static SyntaxTree syntax_tree_init(LexicAnalyzer lexic_analyzer[static 1], Token
     AtomTypeRegexes atom_type_regexes = {0};
     atom_type_regexes_init(&atom_type_regexes);
 
+    #define ASSERT_ATOM_REGEX(list_el, ...) assert_atom_regex(lexic_analyzer->str, syntax_tree.atom_arr.data, list_el, ARRAY_COUNT((const regex_t*const[]){__VA_ARGS__}), (const regex_t*const[]){__VA_ARGS__}, __FILE__, __LINE__, __FUNCTION__)
+
         const Range *const global_scope_list = &syntax_tree.list_arr.data[0];
         for(size_t global_scope_list_el_index = 0; global_scope_list_el_index < global_scope_list->count; ++global_scope_list_el_index) {
             const SyntaxListElement *const global_scope_list_el = &syntax_tree.list_element_arr.data[global_scope_list_el_index];
@@ -422,17 +438,11 @@ static SyntaxTree syntax_tree_init(LexicAnalyzer lexic_analyzer[static 1], Token
             const SyntaxListElement * fn_def_list_el = &syntax_tree.list_element_arr.data[fn_def_list->offset];
             ASSERT(fn_def_list_el->type == SYNTAX_LIST_ELEMENT_TYPE_ATOM);
 
-            regmatch_t regmatch = {0};
-            ASSERT(regexec(&atom_type_regexes.FN, lexic_analyzer->str + syntax_tree.atom_arr.data[fn_def_list_el->index].start, 1, &regmatch, 0) != REG_NOMATCH);
-            ASSERT(regmatch.rm_so == 0);
-            ASSERT((regmatch.rm_eo - regmatch.rm_so) == (syntax_tree.atom_arr.data[fn_def_list_el->index].end - syntax_tree.atom_arr.data[fn_def_list_el->index].start)); 
+            ASSERT_ATOM_REGEX(fn_def_list_el, &atom_type_regexes.FN);
 
             // function definition name
             fn_def_list_el++;
-            ASSERT(fn_def_list_el->type == SYNTAX_LIST_ELEMENT_TYPE_ATOM);
-            ASSERT(regexec(&atom_type_regexes.IDENTIFIER, lexic_analyzer->str + syntax_tree.atom_arr.data[fn_def_list_el->index].start, 1, &regmatch, 0) != REG_NOMATCH);
-            ASSERT(regmatch.rm_so == 0);
-            ASSERT((regmatch.rm_eo - regmatch.rm_so) == (syntax_tree.atom_arr.data[fn_def_list_el->index].end - syntax_tree.atom_arr.data[fn_def_list_el->index].start)); 
+            ASSERT_ATOM_REGEX(fn_def_list_el, &atom_type_regexes.IDENTIFIER);
 
             // function definition param list
             fn_def_list_el++;
@@ -444,8 +454,8 @@ static SyntaxTree syntax_tree_init(LexicAnalyzer lexic_analyzer[static 1], Token
                     ASSERT(fn_def_param_list_el->type == SYNTAX_LIST_ELEMENT_TYPE_LIST);
                     const Range *const id_type_list = &syntax_tree.list_arr.data[fn_def_param_list_el->index];
                     ASSERT(id_type_list->count == 2);
-                    // const SyntaxListElement *id_type_list_element = &syntax_tree.list_element_arr.data[id_type_list->offset];
-                    // ASSERT(id_type_list_element->type == SYNTAX_LIST_ELEMENT_TYPE_ATOM);
+                    const SyntaxListElement *id_type_list_element = &syntax_tree.list_element_arr.data[id_type_list->offset];
+                    ASSERT(id_type_list_element->type == SYNTAX_LIST_ELEMENT_TYPE_ATOM);
                     // syntax_tree.atom_arr.data[id_type_list_element->index]
                     //
                     // id_type_list_element++;
