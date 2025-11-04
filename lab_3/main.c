@@ -293,8 +293,10 @@ static void assert_atom_regex(const char data[], const StringRange atom_arr[], c
     const StringRange *const atom = &atom_arr[list_el->index];
     bool found = false;
     for(size_t i = 0; i < regexes_count; ++i) {
-        ASSERT_X(found == false, file, line, function);
+        // LOG_DEBUG("%.*s", atom->end - atom->start, data + atom->start);
+        // LOG_DEBUG("index: %lu", i);
         if(regexec(regexes[i], data + atom->start, 1, &regmatch, 0) != REG_NOMATCH) {
+            ASSERT_X(found == false, file, line, function);
             found = true;
             ASSERT_X(regmatch.rm_so == 0, file, line, function);
             ASSERT_X((regmatch.rm_eo - regmatch.rm_so) == (atom->end - atom->start), file, line, function); 
@@ -426,7 +428,7 @@ static SyntaxTree syntax_tree_init(LexicAnalyzer lexic_analyzer[static 1], Token
     AtomTypeRegexes atom_type_regexes = {0};
     atom_type_regexes_init(&atom_type_regexes);
 
-    #define ASSERT_ATOM_REGEX(list_el, ...) assert_atom_regex(lexic_analyzer->str, syntax_tree.atom_arr.data, list_el, ARRAY_COUNT((const regex_t*const[]){__VA_ARGS__}), (const regex_t*const[]){__VA_ARGS__}, __FILE__, __LINE__, __FUNCTION__)
+    #define ASSERT_ATOM_REGEX(list_el, ...) assert_atom_regex(lexic_analyzer->str, syntax_tree.atom_arr.data, list_el, ARRAY_COUNT(((const regex_t*const[]){__VA_ARGS__})), ((const regex_t*const[]){__VA_ARGS__}), __FILE__, __LINE__, __FUNCTION__)
 
         const Range *const global_scope_list = &syntax_tree.list_arr.data[0];
         for(size_t global_scope_list_el_index = 0; global_scope_list_el_index < global_scope_list->count; ++global_scope_list_el_index) {
@@ -455,11 +457,9 @@ static SyntaxTree syntax_tree_init(LexicAnalyzer lexic_analyzer[static 1], Token
                     const Range *const id_type_list = &syntax_tree.list_arr.data[fn_def_param_list_el->index];
                     ASSERT(id_type_list->count == 2);
                     const SyntaxListElement *id_type_list_element = &syntax_tree.list_element_arr.data[id_type_list->offset];
-                    ASSERT(id_type_list_element->type == SYNTAX_LIST_ELEMENT_TYPE_ATOM);
-                    // syntax_tree.atom_arr.data[id_type_list_element->index]
-                    //
-                    // id_type_list_element++;
-                    // ASSERT(id_type_list_element->type == SYNTAX_LIST_ELEMENT_TYPE_ATOM);
+                    ASSERT_ATOM_REGEX(id_type_list_element, &atom_type_regexes.IDENTIFIER);
+                    id_type_list_element++;
+                    ASSERT_ATOM_REGEX(id_type_list_element, &atom_type_regexes.TYPE_BOOL, &atom_type_regexes.TYPE_FLOAT, &atom_type_regexes.TYPE_INT, &atom_type_regexes.TYPE_STRING);
                 }
             }
             fn_def_list_el++;
@@ -470,6 +470,7 @@ static SyntaxTree syntax_tree_init(LexicAnalyzer lexic_analyzer[static 1], Token
                 for(size_t fn_def_statement_list_el_index = 0; fn_def_statement_list_el_index < fn_def_statement_list->count; ++fn_def_statement_list_el_index) {
                     const SyntaxListElement *const fn_def_statement_list_el = &syntax_tree.list_element_arr.data[fn_def_statement_list->offset];
                     ASSERT(fn_def_statement_list_el->type == SYNTAX_LIST_ELEMENT_TYPE_LIST);
+
                 }
             }
         }
