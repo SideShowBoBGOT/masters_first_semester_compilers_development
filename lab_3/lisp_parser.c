@@ -217,6 +217,76 @@ typedef struct {
     } atom_arr;
 } SyntaxTree;
 
+static void syntax_tree_print(const SyntaxTree syntax_tree[static 1], const char data[]) {
+    LOG_DEBUG("syntax_tree->list_arr.capacity: %lu", syntax_tree->list_arr.capacity);
+    LOG_DEBUG("syntax_tree->list_element_arr.capacity: %lu", syntax_tree->list_element_arr.capacity);
+    LOG_DEBUG("syntax_tree->atom_arr.capacity: %lu", syntax_tree->atom_arr.capacity);
+    PRINTFLN("Atoms:");
+    for(size_t i = 0; i < syntax_tree->atom_arr.capacity; ++i) {
+        const StringRange *const atom = &syntax_tree->atom_arr.data[i];
+        PRINTFLN("\tElement Atom %lu: %.*s", i, atom->end - atom->start, data + atom->start);
+    }
+    for(size_t i = 0; i < syntax_tree->list_arr.capacity; ++i) {
+        PRINTFLN("List %lu:", i);
+        const Range *const list = &syntax_tree->list_arr.data[i];
+        for(size_t j = 0; j < list->count; ++j) {
+            const size_t list_element_index = list->offset + j;  
+            const SyntaxListElement *const list_element = &syntax_tree->list_element_arr.data[list_element_index];
+            switch(list_element->type) {
+                case SYNTAX_LIST_ELEMENT_TYPE_ATOM: {
+                    const StringRange *const atom = &syntax_tree->atom_arr.data[list_element->index];
+                    PRINTFLN("\tElement Atom %lu: %.*s", list_element->index, atom->end - atom->start, data + atom->start);
+                    break;
+                }
+                case SYNTAX_LIST_ELEMENT_TYPE_LIST: {
+                    PRINTFLN("\tElement List %lu", list_element->index);
+                    break;
+                }
+                default: {
+                    ASSERT(false);
+                }
+            }
+        }
+    }
+}
+
+#define ATOM_PATTERNS\
+    X(FN, "fn")\
+    X(WHILE, "while")\
+    X(IF, "fn")\
+    X(SET, "fn")\
+    X(TYPE_INT, "int")\
+    X(TYPE_FLOAT, "float")\
+    X(TYPE_STRING, "string")\
+    X(TYPE_BOOL, "bool")\
+    X(IDENTIFIER, "[a-zA-Z!$%&*/:<=>?^_~][a-zA-Z!$%&*/:<=>?^_~0-9]*|[+]|[-]")\
+    X(BOOL, "true|false")\
+    X(INT, "[+-]?[0-9]+")\
+    X(FLOAT, "[+-]?[0-9]+[.][0-9]+")\
+    X(STRING, "\"[^\"]*\"")\
+
+typedef enum {
+#define X(name, pattern) ATOM_TYPE_ ## name,
+    ATOM_PATTERNS
+#undef X
+} AtomType;
+
+typedef struct {
+#define X(name, pattern) regex_t name;
+    ATOM_PATTERNS
+#undef X
+} AtomTypeRegexes;
+
+static void atom_type_regexes_init(AtomTypeRegexes atom_type_regexes[static 1]) {
+    #define X(name, pattern) ASSERT(regcomp(&atom_type_regexes->name, "^" pattern, REG_EXTENDED) == 0);
+        ATOM_PATTERNS
+    #undef X
+}
+static void atom_type_regexes_deinit(AtomTypeRegexes atom_type_regexes[static 1]) {
+    #define X(name, pattern) regfree(&atom_type_regexes->name);
+        ATOM_PATTERNS
+    #undef X
+}
 
 
 static SyntaxTree syntax_tree_init(LexicAnalyzer lexic_analyzer[static 1], Token token[static 1]) {
@@ -339,43 +409,50 @@ static SyntaxTree syntax_tree_init(LexicAnalyzer lexic_analyzer[static 1], Token
     free(list_index_arr);
     syntax_tree_print(&syntax_tree, lexic_analyzer->str);
 
+    AtomTypeRegexes atom_type_regexes = {0};
+    atom_type_regexes_init(&atom_type_regexes);
+    
 
+        const Range *const global_scope_list = &syntax_tree.list_arr.data[0];
+        for(size_t global_scope_list_el_index = 0; global_scope_list_el_index < global_scope_list->count; ++global_scope_list_el_index) {
+            const SyntaxListElement *const fn_def_list_el = &syntax_tree.list_element_arr.data[global_scope_list_el_index];
+            ASSERT(fn_def_list_el->type == SYNTAX_LIST_ELEMENT_TYPE_LIST);
+            const Range *const fn_def_list = &syntax_tree.list_arr.data[fn_def_list_el->index];
+            ASSERT(fn_def_list->count == 4);
 
+            const SyntaxListElement *list_el = &syntax_tree.list_element_arr.data[fn_def_list->offset + 0];
+            ASSERT(list_el->type == SYNTAX_LIST_ELEMENT_TYPE_ATOM);
+
+            regmatch_t regmatch = {0};
+            ASSERT(regexec(&atom_type_regexes.FN, lexic_analyzer->str + syntax_tree.atom_arr.data[list_el->index].start, 1, &regmatch, 0) != REG_NOMATCH);
+            ASSERT(regmatch.rm_so == 0);
+            ASSERT((regmatch.rm_eo - regmatch.rm_so) == (syntax_tree.atom_arr.data[list_el->index].end - syntax_tree.atom_arr.data[list_el->index].start)); 
+            LOG_DEBUG("AHAHAH");
+
+            // atom_type_regexes.FN
+            // lexic_analyzer->str + 
+            // syntax_tree.atom_arr.data[list_el->index]
+            // syntax_tree.atom_arr.data[list_el->index]
+            // ASSERT(list_el->type == SYNTAX_LIST_ELEMENT_TYPE_ATOM);
+            // syntax_tree.atom_arr.data[]
+            //
+            // size_t fn_def_list_el_index = 0;
+            // for( fn_def_list_el_index < fn_def_list->count; ++fn_def_list_el_index) {
+            //
+            // }
+            // fn_def_list->
+            //
+            // syntax_tree.list_arr.data[syntax_tree.list_element_arr.data[i].index]
+        }
+        // Range *const list = &syntax_tree.list_arr.data[i];
+        // for(size_t i = 0; i < syntax_tree.list_arr.capacity; ++i) {
+        // }
+
+    atom_type_regexes_deinit(&atom_type_regexes);
     return syntax_tree;
 }
 
-static void syntax_tree_print(const SyntaxTree syntax_tree[static 1], const char data[]) {
-    LOG_DEBUG("syntax_tree->list_arr.capacity: %lu", syntax_tree->list_arr.capacity);
-    LOG_DEBUG("syntax_tree->list_element_arr.capacity: %lu", syntax_tree->list_element_arr.capacity);
-    LOG_DEBUG("syntax_tree->atom_arr.capacity: %lu", syntax_tree->atom_arr.capacity);
-    PRINTFLN("Atoms:");
-    for(size_t i = 0; i < syntax_tree->atom_arr.capacity; ++i) {
-        const StringRange *const atom = &syntax_tree->atom_arr.data[i];
-        PRINTFLN("\tElement Atom %lu: %.*s", i, atom->end - atom->start, data + atom->start);
-    }
-    for(size_t i = 0; i < syntax_tree->list_arr.capacity; ++i) {
-        PRINTFLN("List %lu:", i);
-        const Range *const list = &syntax_tree->list_arr.data[i];
-        for(size_t j = 0; j < list->count; ++j) {
-            const size_t list_element_index = list->offset + j;  
-            const SyntaxListElement *const list_element = &syntax_tree->list_element_arr.data[list_element_index];
-            switch(list_element->type) {
-                case SYNTAX_LIST_ELEMENT_TYPE_ATOM: {
-                    const StringRange *const atom = &syntax_tree->atom_arr.data[list_element->index];
-                    PRINTFLN("\tElement Atom %lu: %.*s", list_element->index, atom->end - atom->start, data + atom->start);
-                    break;
-                }
-                case SYNTAX_LIST_ELEMENT_TYPE_LIST: {
-                    PRINTFLN("\tElement List %lu", list_element->index);
-                    break;
-                }
-                default: {
-                    ASSERT(false);
-                }
-            }
-        }
-    }
-}
+
 
 int main(const int argc, const char *argv[]) {
     ASSERT(argc == 2);
