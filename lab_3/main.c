@@ -456,8 +456,9 @@ static void syntax_statement_list(const SyntaxListElement list_el[static 1], con
                 ASSERT_REGMATCH_ATOM(regmatch, statement_head);
                 syntax_tree->list_property_arr.data[statement_list_el->index] = SYNTAX_LIST_PROPERTY_STATEMENT_FUNCTION_CALL;
                 syntax_tree->atom_property_arr.data[statement_el->index] = SYNTAX_ATOM_PROPERTY_FUNCTION_NAME;
+                // LOG_DEBUG("%.*s", statement_head->end - statement_head->start, program_text + statement_head->start);
                 for(size_t fn_call_list_el_index = 1; fn_call_list_el_index < statement->count; ++fn_call_list_el_index) {
-                    const SyntaxListElement *const fn_call_list_el = &syntax_tree->list_element_arr.data[fn_call_list_el_index];
+                    const SyntaxListElement *const fn_call_list_el = &syntax_tree->list_element_arr.data[statement->offset + fn_call_list_el_index];
                     syntax_argument(fn_call_list_el, syntax_tree, atom_type_regexes, program_text);
                 }
             } else {
@@ -499,6 +500,9 @@ static SyntaxTree syntax_tree_init(LexicAnalyzer lexic_analyzer[static 1], Token
             }
         }
     }
+    syntax_tree.atom_property_arr.capacity = syntax_tree.atom_arr.capacity;
+    syntax_tree.list_property_arr.capacity = syntax_tree.list_arr.capacity;
+
     syntax_tree.list_arr.data = malloc(DYNAMIC_ARRAY_SIZE(&syntax_tree.list_arr));
     memset(syntax_tree.list_arr.data, 0, DYNAMIC_ARRAY_SIZE(&syntax_tree.list_arr));
 
