@@ -3,7 +3,7 @@
     (set i 0)
     (return i)
 ))
-(fn main ((a int) (b float) (c float)) (
+(fn fn12 ((a int) (b float) (c float)) (
     (set _ (display c))
     (set d 12)
     (if (== 55 104) (

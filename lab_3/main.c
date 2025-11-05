@@ -1,6 +1,5 @@
 #ifndef _GNU_SOURCE
 #define _GNU_SOURCE
-#include <stdint.h>
 #endif
 #include <inttypes.h>
 #include <stdio.h>
@@ -219,6 +218,7 @@ typedef enum {
     SYNTAX_LIST_PROPERTY_FUNCTION_DEFINITION_PARAM_TYPE_AND_NAME,
     SYNTAX_LIST_PROPERTY_INNER_FUNCTION_CALL,
     SYNTAX_LIST_PROPERTY_STATEMENT_FUNCTION_CALL,
+    SYNTAX_LIST_PROPERTY_FUNCTION_DEFINITION_STATEMENT_LIST,
     SYNTAX_LIST_PROPERTY_STATEMENT_LIST,
     SYNTAX_LIST_PROPERTY_STATEMENT_IF,
     SYNTAX_LIST_PROPERTY_STATEMENT_WHILE,
@@ -325,11 +325,6 @@ static void atom_type_regexes_deinit(AtomTypeRegexes atom_type_regexes[static 1]
         ATOM_PATTERNS
     #undef X
 }
-
-// typedef struct {
-//     const char *data;
-//     const StringRange *atom_arr;
-// } AtomAsserter;
 
 #define ASSERT_REGMATCH_ATOM_X(regmatch, atom, file, line, function)\
     do {\
@@ -661,17 +656,52 @@ static SyntaxTree syntax_tree_init(LexicAnalyzer lexic_analyzer[static 1], Token
                 }
                 fn_def_list_el++;
                 syntax_statement_list(fn_def_list_el, &syntax_tree, &atom_type_regexes, program_text);
+                syntax_tree.list_property_arr.data[fn_def_list_el->index] = SYNTAX_LIST_PROPERTY_FUNCTION_DEFINITION_STATEMENT_LIST;
+                // return must be the last
+                // const Range *const statement_list = &syntax_tree.list_arr.data[fn_def_list_el->index];
+                // ASSERT(statement_list->count > 0);
+                // const SyntaxListElement *const last_list_el = &syntax_tree.list_element_arr.data[statement_list->offset + statement_list->count - 1];
+                // ASSERT(last_list_el->type == SYNTAX_LIST_ELEMENT_TYPE_LIST);
+                // ASSERT(syntax_tree.list_property_arr.data[last_list_el->index] == SYNTAX_LIST_PROPERTY_STATEMENT_RETURN);
             }
         atom_type_regexes_deinit(&atom_type_regexes);
     }
     for(size_t i = 0; i < syntax_tree.list_property_arr.capacity; ++i) {
-        // LOG_DEBUG("%lu", i);
         ASSERT(syntax_tree.list_property_arr.data[i] != SYNTAX_LIST_PROPERTY_INVALID);
     }
     for(size_t i = 0; i < syntax_tree.atom_property_arr.capacity; ++i) {
-        // LOG_DEBUG("%lu", i);
         ASSERT(syntax_tree.atom_property_arr.data[i] != SYNTAX_ATOM_PROPERTY_INVALID);
     }
+    for(size_t i = 0; i < syntax_tree.list_property_arr.capacity; ++i) {
+        switch(syntax_tree.list_property_arr.data[i]) {
+            case SYNTAX_LIST_PROPERTY_FUNCTION_DEFINITION_STATEMENT_LIST: {
+                ASSERT(syntax_tree.list_arr.data[i].count > 0);
+                for(size_t list_el_index = 0; list_el_index < syntax_tree.list_arr.data[i].count - 1; ++list_el_index) {
+                    const SyntaxListElement *const list_el = &syntax_tree.list_element_arr.data[syntax_tree.list_arr.data[i].offset + list_el_index];
+                    ASSERT(list_el->type == SYNTAX_LIST_ELEMENT_TYPE_LIST);
+                    ASSERT(syntax_tree.list_property_arr.data[list_el->index] != SYNTAX_LIST_PROPERTY_STATEMENT_RETURN);
+                }
+                const SyntaxListElement *const list_el = &syntax_tree.list_element_arr.data[syntax_tree.list_arr.data[i].offset + syntax_tree.list_arr.data[i].count - 1];
+                ASSERT(list_el->type == SYNTAX_LIST_ELEMENT_TYPE_LIST);
+                ASSERT(syntax_tree.list_property_arr.data[list_el->index] == SYNTAX_LIST_PROPERTY_STATEMENT_RETURN);
+                break;
+            }
+            case SYNTAX_LIST_PROPERTY_STATEMENT_LIST: {
+                for(size_t list_el_index = 0; list_el_index < syntax_tree.list_arr.data[i].count; ++list_el_index) {
+                    const SyntaxListElement *const list_el = &syntax_tree.list_element_arr.data[syntax_tree.list_arr.data[i].offset + list_el_index];
+                    if(list_el->type == SYNTAX_LIST_ELEMENT_TYPE_LIST) {
+                        ASSERT(syntax_tree.list_property_arr.data[list_el->index] != SYNTAX_LIST_PROPERTY_STATEMENT_RETURN);
+                    }
+                }
+                break;
+            }
+            default: {
+                break;
+            }
+        }
+    }
+    
+    
     return syntax_tree;
 }
 
