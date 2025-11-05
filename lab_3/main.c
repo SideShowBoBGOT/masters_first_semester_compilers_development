@@ -665,11 +665,11 @@ static SyntaxTree syntax_tree_init(LexicAnalyzer lexic_analyzer[static 1], Token
         atom_type_regexes_deinit(&atom_type_regexes);
     }
     for(size_t i = 0; i < syntax_tree.list_property_arr.capacity; ++i) {
-        LOG_DEBUG("%lu", i);
+        // LOG_DEBUG("%lu", i);
         ASSERT(syntax_tree.list_property_arr.data[i] != SYNTAX_LIST_PROPERTY_INVALID);
     }
     for(size_t i = 0; i < syntax_tree.atom_property_arr.capacity; ++i) {
-        LOG_DEBUG("%lu", i);
+        // LOG_DEBUG("%lu", i);
         ASSERT(syntax_tree.atom_property_arr.data[i] != SYNTAX_ATOM_PROPERTY_INVALID);
     }
     return syntax_tree;
