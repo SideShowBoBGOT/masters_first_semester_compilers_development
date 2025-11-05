@@ -602,66 +602,76 @@ static SyntaxTree syntax_tree_init(LexicAnalyzer lexic_analyzer[static 1], Token
     }
     free(list_index_arr);
     syntax_tree_print(&syntax_tree, lexic_analyzer->str);
+    {
+        AtomTypeRegexes atom_type_regexes = {0};
+        atom_type_regexes_init(&atom_type_regexes);
+            const Range *const global_scope_list = &syntax_tree.list_arr.data[0];
+            syntax_tree.list_property_arr.data[0] = SYNTAX_LIST_PROPERTY_GLOBAL;
 
-    AtomTypeRegexes atom_type_regexes = {0};
-    atom_type_regexes_init(&atom_type_regexes);
-        const Range *const global_scope_list = &syntax_tree.list_arr.data[0];
-        syntax_tree.list_property_arr.data[0] = SYNTAX_LIST_PROPERTY_GLOBAL;
+            for(size_t global_scope_list_el_index = 0; global_scope_list_el_index < global_scope_list->count; ++global_scope_list_el_index) {
+                const SyntaxListElement *const global_scope_list_el = &syntax_tree.list_element_arr.data[global_scope_list_el_index];
+                ASSERT(global_scope_list_el->type == SYNTAX_LIST_ELEMENT_TYPE_LIST);
+                syntax_tree.list_property_arr.data[global_scope_list_el->index] = SYNTAX_LIST_PROPERTY_FUNCTION_DEFINITION;
+                const Range *const fn_def_list = &syntax_tree.list_arr.data[global_scope_list_el->index];
+                ASSERT(fn_def_list->count == 4);
 
-        for(size_t global_scope_list_el_index = 0; global_scope_list_el_index < global_scope_list->count; ++global_scope_list_el_index) {
-            const SyntaxListElement *const global_scope_list_el = &syntax_tree.list_element_arr.data[global_scope_list_el_index];
-            ASSERT(global_scope_list_el->type == SYNTAX_LIST_ELEMENT_TYPE_LIST);
-            syntax_tree.list_property_arr.data[global_scope_list_el->index] = SYNTAX_LIST_PROPERTY_FUNCTION_DEFINITION;
-            const Range *const fn_def_list = &syntax_tree.list_arr.data[global_scope_list_el->index];
-            ASSERT(fn_def_list->count == 4);
+                const SyntaxListElement * fn_def_list_el = &syntax_tree.list_element_arr.data[fn_def_list->offset];
+                ASSERT_ATOM_REGEX(fn_def_list_el, &syntax_tree, &atom_type_regexes.FN);
+                syntax_tree.atom_property_arr.data[fn_def_list_el->index] = SYNTAX_ATOM_PROPERTY_KEYWORD_FN;
 
-            const SyntaxListElement * fn_def_list_el = &syntax_tree.list_element_arr.data[fn_def_list->offset];
-            ASSERT_ATOM_REGEX(fn_def_list_el, &syntax_tree, &atom_type_regexes.FN);
-            syntax_tree.atom_property_arr.data[fn_def_list_el->index] = SYNTAX_ATOM_PROPERTY_KEYWORD_FN;
+                // function definition name
+                fn_def_list_el++;
+                ASSERT_ATOM_REGEX(fn_def_list_el, &syntax_tree, &atom_type_regexes.IDENTIFIER);
+                syntax_tree.atom_property_arr.data[fn_def_list_el->index] = SYNTAX_ATOM_PROPERTY_FUNCTION_NAME;
 
-            // function definition name
-            fn_def_list_el++;
-            ASSERT_ATOM_REGEX(fn_def_list_el, &syntax_tree, &atom_type_regexes.IDENTIFIER);
-            syntax_tree.atom_property_arr.data[fn_def_list_el->index] = SYNTAX_ATOM_PROPERTY_FUNCTION_NAME;
+                // function definition param list
+                fn_def_list_el++;
+                ASSERT(fn_def_list_el->type == SYNTAX_LIST_ELEMENT_TYPE_LIST);
+                syntax_tree.list_property_arr.data[fn_def_list_el->index] = SYNTAX_LIST_PROPERTY_FUNCTION_DEFINITION_PARAM_LIST;
+                {
+                    const Range *const fn_def_param_list = &syntax_tree.list_arr.data[fn_def_list_el->index];
+                    for(size_t fn_def_param_list_el_index = 0; fn_def_param_list_el_index < fn_def_param_list->count; ++fn_def_param_list_el_index) {
+                        const SyntaxListElement *const fn_def_param_list_el = &syntax_tree.list_element_arr.data[fn_def_param_list->offset + fn_def_param_list_el_index];
+                        ASSERT(fn_def_param_list_el->type == SYNTAX_LIST_ELEMENT_TYPE_LIST);
+                        const Range *const id_type_list = &syntax_tree.list_arr.data[fn_def_param_list_el->index];
+                        ASSERT(id_type_list->count == 2);
+                        syntax_tree.list_property_arr.data[fn_def_param_list_el->index] = SYNTAX_LIST_PROPERTY_FUNCTION_DEFINITION_PARAM_TYPE_AND_NAME;
 
-            // function definition param list
-            fn_def_list_el++;
-            ASSERT(fn_def_list_el->type == SYNTAX_LIST_ELEMENT_TYPE_LIST);
-            syntax_tree.list_property_arr.data[fn_def_list_el->index] = SYNTAX_LIST_PROPERTY_FUNCTION_DEFINITION_PARAM_LIST;
-            {
-                const Range *const fn_def_param_list = &syntax_tree.list_arr.data[fn_def_list_el->index];
-                for(size_t fn_def_param_list_el_index = 0; fn_def_param_list_el_index < fn_def_param_list->count; ++fn_def_param_list_el_index) {
-                    const SyntaxListElement *const fn_def_param_list_el = &syntax_tree.list_element_arr.data[fn_def_param_list->offset];
-                    ASSERT(fn_def_param_list_el->type == SYNTAX_LIST_ELEMENT_TYPE_LIST);
-                    const Range *const id_type_list = &syntax_tree.list_arr.data[fn_def_param_list_el->index];
-                    ASSERT(id_type_list->count == 2);
-                    syntax_tree.list_property_arr.data[fn_def_param_list_el->index] = SYNTAX_LIST_PROPERTY_FUNCTION_DEFINITION_PARAM_TYPE_AND_NAME;
+                        const SyntaxListElement *id_type_list_element = &syntax_tree.list_element_arr.data[id_type_list->offset];
+                        ASSERT_ATOM_REGEX(id_type_list_element, &syntax_tree, &atom_type_regexes.IDENTIFIER);
+                        syntax_tree.atom_property_arr.data[id_type_list_element->index] = SYNTAX_ATOM_PROPERTY_FUNCTION_DEFINITION_PARAMETER;
 
-                    const SyntaxListElement *id_type_list_element = &syntax_tree.list_element_arr.data[id_type_list->offset];
-                    ASSERT_ATOM_REGEX(id_type_list_element, &syntax_tree, &atom_type_regexes.IDENTIFIER);
-                    syntax_tree.atom_property_arr.data[id_type_list_element->index] = SYNTAX_ATOM_PROPERTY_FUNCTION_DEFINITION_PARAMETER;
-                    id_type_list_element++;
-                    ASSERT(id_type_list_element->type == SYNTAX_LIST_ELEMENT_TYPE_ATOM);
-                    const StringRange *const atom = &syntax_tree.atom_arr.data[id_type_list_element->index];
+                        id_type_list_element++;
+                        ASSERT(id_type_list_element->type == SYNTAX_LIST_ELEMENT_TYPE_ATOM);
+                        const StringRange *const atom = &syntax_tree.atom_arr.data[id_type_list_element->index];
 
-                    regmatch_t regmatch = {0};
-                    if(regexec(&atom_type_regexes.TYPE_BOOL, program_text + atom->start, 1, &regmatch, 0) != REG_NOMATCH) {
-                        syntax_tree.atom_property_arr.data[id_type_list_element->index] = SYNTAX_ATOM_PROPERTY_TYPE_BOOL;
-                    } else if(regexec(&atom_type_regexes.TYPE_INT, program_text + atom->start, 1, &regmatch, 0) != REG_NOMATCH) {
-                        syntax_tree.atom_property_arr.data[id_type_list_element->index] = SYNTAX_ATOM_PROPERTY_TYPE_INT;
-                    } else if(regexec(&atom_type_regexes.TYPE_FLOAT, program_text + atom->start, 1, &regmatch, 0) != REG_NOMATCH) {
-                        syntax_tree.atom_property_arr.data[id_type_list_element->index] = SYNTAX_ATOM_PROPERTY_TYPE_FLOAT;
-                    } else if(regexec(&atom_type_regexes.TYPE_STRING, program_text + atom->start, 1, &regmatch, 0) != REG_NOMATCH) {
-                        syntax_tree.atom_property_arr.data[id_type_list_element->index] = SYNTAX_ATOM_PROPERTY_TYPE_STRING;
-                    } else {
-                        ASSERT(false);
+                        regmatch_t regmatch = {0};
+                        if(regexec(&atom_type_regexes.TYPE_BOOL, program_text + atom->start, 1, &regmatch, 0) != REG_NOMATCH) {
+                            syntax_tree.atom_property_arr.data[id_type_list_element->index] = SYNTAX_ATOM_PROPERTY_TYPE_BOOL;
+                        } else if(regexec(&atom_type_regexes.TYPE_INT, program_text + atom->start, 1, &regmatch, 0) != REG_NOMATCH) {
+                            syntax_tree.atom_property_arr.data[id_type_list_element->index] = SYNTAX_ATOM_PROPERTY_TYPE_INT;
+                        } else if(regexec(&atom_type_regexes.TYPE_FLOAT, program_text + atom->start, 1, &regmatch, 0) != REG_NOMATCH) {
+                            syntax_tree.atom_property_arr.data[id_type_list_element->index] = SYNTAX_ATOM_PROPERTY_TYPE_FLOAT;
+                        } else if(regexec(&atom_type_regexes.TYPE_STRING, program_text + atom->start, 1, &regmatch, 0) != REG_NOMATCH) {
+                            syntax_tree.atom_property_arr.data[id_type_list_element->index] = SYNTAX_ATOM_PROPERTY_TYPE_STRING;
+                        } else {
+                            ASSERT(false);
+                        }
                     }
                 }
+                fn_def_list_el++;
+                syntax_statement_list(fn_def_list_el, &syntax_tree, &atom_type_regexes, program_text);
             }
-            fn_def_list_el++;
-            syntax_statement_list(fn_def_list_el, &syntax_tree, &atom_type_regexes, program_text);
-        }
-    atom_type_regexes_deinit(&atom_type_regexes);
+        atom_type_regexes_deinit(&atom_type_regexes);
+    }
+    for(size_t i = 0; i < syntax_tree.list_property_arr.capacity; ++i) {
+        LOG_DEBUG("%lu", i);
+        ASSERT(syntax_tree.list_property_arr.data[i] != SYNTAX_LIST_PROPERTY_INVALID);
+    }
+    for(size_t i = 0; i < syntax_tree.atom_property_arr.capacity; ++i) {
+        LOG_DEBUG("%lu", i);
+        ASSERT(syntax_tree.atom_property_arr.data[i] != SYNTAX_ATOM_PROPERTY_INVALID);
+    }
     return syntax_tree;
 }
 
