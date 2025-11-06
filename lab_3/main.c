@@ -53,7 +53,7 @@
 #define TOKENS_MAP \
     X(LPAREN, "[(]")\
     X(RPAREN, "[)]")\
-    X(ATOM, "[\\a-zA-Z!$%&*/+-:<=>?^_~0-9]+|\"[^\"]*\"")\
+    X(ATOM, "[\\a-zA-Z!$%&*/+-:<=>?^_~0-9]+")\
     X(NEWLINE, "\n")\
     X(SPACETAB, "[ \t]+")
 
@@ -196,12 +196,10 @@ typedef enum {
     SYNTAX_ATOM_PROPERTY_TYPE_INT,
     SYNTAX_ATOM_PROPERTY_TYPE_FLOAT,
     SYNTAX_ATOM_PROPERTY_TYPE_BOOL,
-    SYNTAX_ATOM_PROPERTY_TYPE_STRING,
     SYNTAX_ATOM_PROPERTY_VARIABLE,
     SYNTAX_ATOM_PROPERTY_INT,
     SYNTAX_ATOM_PROPERTY_FLOAT,
     SYNTAX_ATOM_PROPERTY_BOOL,
-    SYNTAX_ATOM_PROPERTY_STRING,
     SYNTAX_ATOM_PROPERTY_FUNCTION_NAME,
     SYNTAX_ATOM_PROPERTY_KEYWORD_FN,
     SYNTAX_ATOM_PROPERTY_KEYWORD_IF,
@@ -216,8 +214,7 @@ typedef enum {
     SYNTAX_LIST_PROPERTY_FUNCTION_DEFINITION,
     SYNTAX_LIST_PROPERTY_FUNCTION_DEFINITION_PARAM_LIST,
     SYNTAX_LIST_PROPERTY_FUNCTION_DEFINITION_PARAM_TYPE_AND_NAME,
-    SYNTAX_LIST_PROPERTY_INNER_FUNCTION_CALL,
-    SYNTAX_LIST_PROPERTY_STATEMENT_FUNCTION_CALL,
+    SYNTAX_LIST_PROPERTY_FUNCTION_CALL,
     SYNTAX_LIST_PROPERTY_FUNCTION_DEFINITION_STATEMENT_LIST,
     SYNTAX_LIST_PROPERTY_STATEMENT_LIST,
     SYNTAX_LIST_PROPERTY_STATEMENT_IF,
@@ -301,7 +298,6 @@ static void syntax_tree_print(const SyntaxTree syntax_tree[static 1], const char
     X(BOOL, "true|false")\
     X(INT, "[+-]?[0-9]+")\
     X(FLOAT, "[+-]?[0-9]+[.][0-9]+")\
-    X(STRING, "\"[^\"]*\"")\
 
 typedef enum {
 #define X(name, pattern) ATOM_TYPE_ ## name,
@@ -363,8 +359,6 @@ static void syntax_simple_argument(const SyntaxListElement list_el[static 1], co
         syntax_tree->atom_property_arr.data[list_el->index] = SYNTAX_ATOM_PROPERTY_FLOAT; 
     } else if(regexec(&atom_type_regexes->BOOL, program_text + atom->start, 1, &regmatch, 0) != REG_NOMATCH) {
         syntax_tree->atom_property_arr.data[list_el->index] = SYNTAX_ATOM_PROPERTY_BOOL; 
-    } else if(regexec(&atom_type_regexes->STRING, program_text + atom->start, 1, &regmatch, 0) != REG_NOMATCH) {
-        syntax_tree->atom_property_arr.data[list_el->index] = SYNTAX_ATOM_PROPERTY_STRING; 
     } else {
         ASSERT(false);
     }
@@ -378,7 +372,7 @@ static void syntax_argument(const SyntaxListElement list_el[static 1], const Syn
         }
         case SYNTAX_LIST_ELEMENT_TYPE_LIST: {
             const Range *const list = &syntax_tree->list_arr.data[list_el->index];
-            syntax_tree->list_property_arr.data[list_el->index] = SYNTAX_LIST_PROPERTY_INNER_FUNCTION_CALL;
+            syntax_tree->list_property_arr.data[list_el->index] = SYNTAX_LIST_PROPERTY_FUNCTION_CALL;
             ASSERT(list->count > 0);
             const SyntaxListElement *sub_list_el = &syntax_tree->list_element_arr.data[list->offset];
             ASSERT(sub_list_el->type == SYNTAX_LIST_ELEMENT_TYPE_ATOM);
@@ -413,14 +407,11 @@ static void syntax_statement_list(const SyntaxListElement list_el[static 1], con
                 ASSERT_REGMATCH_ATOM(regmatch, statement_head);
                 syntax_tree->list_property_arr.data[statement_list_el->index] = SYNTAX_LIST_PROPERTY_STATEMENT_IF;
                 syntax_tree->atom_property_arr.data[statement_el->index] = SYNTAX_ATOM_PROPERTY_KEYWORD_IF;
-                ASSERT(statement->count == 4);
+                ASSERT(statement->count == 3);
                 // condition
                 statement_el++;
                 syntax_simple_argument(statement_el, syntax_tree, atom_type_regexes, program_text);
                 // true statement list
-                statement_el++;
-                syntax_statement_list(statement_el, syntax_tree, atom_type_regexes, program_text);
-                // false statement list
                 statement_el++;
                 syntax_statement_list(statement_el, syntax_tree, atom_type_regexes, program_text);
             } else if(regexec(&atom_type_regexes->STATEMENT_WHILE, program_text + statement_head->start, 1, &regmatch, 0) != REG_NOMATCH) {
@@ -451,15 +442,6 @@ static void syntax_statement_list(const SyntaxListElement list_el[static 1], con
                 ASSERT(statement->count == 2);
                 statement_el++;
                 syntax_simple_argument(statement_el, syntax_tree, atom_type_regexes, program_text);
-            } else if(regexec(&atom_type_regexes->IDENTIFIER, program_text + statement_head->start, 1, &regmatch, 0) != REG_NOMATCH) {
-                ASSERT_REGMATCH_ATOM(regmatch, statement_head);
-                syntax_tree->list_property_arr.data[statement_list_el->index] = SYNTAX_LIST_PROPERTY_STATEMENT_FUNCTION_CALL;
-                syntax_tree->atom_property_arr.data[statement_el->index] = SYNTAX_ATOM_PROPERTY_FUNCTION_NAME;
-                // LOG_DEBUG("%.*s", statement_head->end - statement_head->start, program_text + statement_head->start);
-                for(size_t fn_call_list_el_index = 1; fn_call_list_el_index < statement->count; ++fn_call_list_el_index) {
-                    const SyntaxListElement *const fn_call_list_el = &syntax_tree->list_element_arr.data[statement->offset + fn_call_list_el_index];
-                    syntax_simple_argument(fn_call_list_el, syntax_tree, atom_type_regexes, program_text);
-                }
             } else {
                 ASSERT(false);
             }
@@ -651,8 +633,6 @@ static SyntaxTree syntax_tree_init(LexicAnalyzer lexic_analyzer[static 1], Token
                             syntax_tree.atom_property_arr.data[id_type_list_element->index] = SYNTAX_ATOM_PROPERTY_TYPE_INT;
                         } else if(regexec(&atom_type_regexes.TYPE_FLOAT, program_text + atom->start, 1, &regmatch, 0) != REG_NOMATCH) {
                             syntax_tree.atom_property_arr.data[id_type_list_element->index] = SYNTAX_ATOM_PROPERTY_TYPE_FLOAT;
-                        } else if(regexec(&atom_type_regexes.TYPE_STRING, program_text + atom->start, 1, &regmatch, 0) != REG_NOMATCH) {
-                            syntax_tree.atom_property_arr.data[id_type_list_element->index] = SYNTAX_ATOM_PROPERTY_TYPE_STRING;
                         } else {
                             ASSERT(false);
                         }
@@ -700,7 +680,7 @@ static SyntaxTree syntax_tree_init(LexicAnalyzer lexic_analyzer[static 1], Token
     }
 
 
-    
+
 
     return syntax_tree;
 }

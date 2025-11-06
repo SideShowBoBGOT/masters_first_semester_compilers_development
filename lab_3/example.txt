@@ -1,4 +1,4 @@
-(fn otherfunc ((a int) (
+(fn otherfunc ((a int)) (
     (set r (** a 6))
     (return r)
 ))
@@ -7,7 +7,6 @@
     (set cond (== d 12))
     (if cond (
         (set d 33.23122222)
-    ) (
     ))
     (set i 0)
     (set cond (< i 10))
