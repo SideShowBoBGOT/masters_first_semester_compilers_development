@@ -21,6 +21,10 @@ class TokenIdentifier(typing.NamedTuple):
 
 Token = TokenLparen | TokenRparen | TokenIdentifier
 
+def panic(msg: str):
+    print(msg)
+    exit(-1)
+
 def tokenize(filepath: pathlib.Path | str) -> Iterator[Token]:
     lparen_re = re.compile(r'[(]')
     rparen_re = re.compile(r'[)]')
@@ -58,13 +62,32 @@ def tokenize(filepath: pathlib.Path | str) -> Iterator[Token]:
             last_newline_offset = offset + 1
             offset += 1
         else:
-            print(f"Error: Unrecognized symbol at line {line_number}, position {column_number}")
-            exit(-1)
+            panic(f"Error: Unrecognized symbol at line {line_number}, position {column_number}")
+
+LispElement: typing.TypeAlias = list[TokenIdentifier] | TokenIdentifier
+
+def build_lisp_tree(elements: list[LispElement], tokenizer: typing.Iterator[Token], lparens: list[TokenLparen]):
+    for token in tokenizer:
+        if isinstance(token, TokenLparen):
+            lparens.append(token)
+            sub_elements: list[LispElement] = []
+            build_lisp_tree(sub_elements, tokenizer, lparens)
+            elements.append(sub_elements)
+        elif isinstance(token, TokenRparen):
+            lparens.pop()
+        else:
+            elements.append(token)
 
 def main():
     filepath = 'example.txt'
-    for token in tokenize(filepath):
-        print(f"- {token}")
+    lparens: list[TokenLparen] = []
+    lisp_tree: list[LispElement] = []
+    build_lisp_tree(lisp_tree, tokenize(filepath), lparens)
+    if len(lparens) > 0:
+        panic(f'Error: Umatched paren at line {lparens[-1].line_number}, position {lparens[-1].column_number}')
+    del lparens
+    
+
 
 if __name__ == '__main__':
     main()
