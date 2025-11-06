@@ -698,7 +698,10 @@ static SyntaxTree syntax_tree_init(LexicAnalyzer lexic_analyzer[static 1], Token
             }
         }
     }
+
+
     
+
     return syntax_tree;
 }
 
