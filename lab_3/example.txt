@@ -1,23 +1,27 @@
 (fn otherfunc () (
-    (display (** 2 6))
-    (set i 0)
-    (return i)
+    (set r (** 2 6))
+    (println_i r)
+    (return r)
 ))
-(fn fn12 ((a int) (b float) (c float)) (
-    (set _ (display c))
+(fn main ((a int) (b float) (c float)) (
     (set d 12)
-    (if (== 55 104) (
+    (set cond (== d 12))
+    (if cond (
         (set d 33.23122222)
-        (println_s "I AM TRUE")
         (println_f b)
     ) (
-        (println_s "I AM FALSE")
         (println_f c)
     ))
     (set i 0)
-    (while (le i 5) (
-        (println_i (* 2 (- a (/ i b))))
+    (set cond (< i 10))
+    (while cond (
+        (set v0 (/ i b))
+        (set v1 (- a v0))
+        (set v2 (+ a 2))
+        (set v3 (* v2 v1))
+        (println_i v3)
         (set i (+ i 1))
+        (set cond (< i 10))
     ))
     (return 0)
 ))
