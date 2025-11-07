@@ -83,8 +83,11 @@ def build_lisp_tree(lisp_list: LispList, tokenizer: typing.Iterator[Token], lpar
         else:
             lisp_list.elements.append(token)
 
-def at_line(token: Token):
-    return f'at line {token.line_number}, column {token.column_number}'
+def at_line(token: Token | LispList) -> str:
+    if isinstance(token, Token):
+        return f'at line {token.line_number}, column {token.column_number}'
+    else:
+        return f'at line {token.lparen.line_number}, column {token.lparen.column_number}'
 
 def check_lisp_element_is_type(el: list[TokenIdentifier] | TokenIdentifier):
     assert isinstance(el, TokenIdentifier)
@@ -198,26 +201,29 @@ def syntax_parse_var_or_const_or_func_call(statement_argument: LispList | TokenI
 
 @dataclasses.dataclass(slots=True)
 class SyntaxStatementSet:
+    lisp_list: LispList
     dest: TokenIdentifier
     src: SyntaxVarOrConstOrFuncCall
 
 @dataclasses.dataclass(slots=True)
 class SyntaxStatementReturn:
+    lisp_list: LispList
     value: SyntaxVarOrConstOrFuncCall
 
 @dataclasses.dataclass(slots=True)
 class SyntaxStatementIf:
+    lisp_list: LispList
     condition: SyntaxVarOrConstOrFuncCall
     true_branch: SyntaxList['SyntaxStatement']
     false_branch: SyntaxList['SyntaxStatement']
 
 @dataclasses.dataclass(slots=True)
 class SyntaxStatementWhile:
+    lisp_list: LispList
     condition: SyntaxVarOrConstOrFuncCall
     statements: SyntaxList['SyntaxStatement']
 
 type SyntaxStatement = SyntaxStatementSet | SyntaxStatementIf | SyntaxStatementWhile | SyntaxStatementReturn
-
 
 def syntax_parse_statement_list(lisp_statement_list: LispList | TokenIdentifier) -> SyntaxList[SyntaxStatement]:
     if isinstance(lisp_statement_list, LispList):
@@ -233,6 +239,7 @@ def syntax_parse_statement_list(lisp_statement_list: LispList | TokenIdentifier)
                             panic(f'Error: Set statement list must have 3 elements {at_line(lisp_statement.lparen)}')
                         statements.syntax_list.append(
                             SyntaxStatementSet(
+                                lisp_statement,
                                 check_atom_identifier(lisp_statement.elements[1]),
                                 syntax_parse_var_or_const_or_func_call(lisp_statement.elements[2])
                             )
@@ -242,6 +249,7 @@ def syntax_parse_statement_list(lisp_statement_list: LispList | TokenIdentifier)
                             panic(f'Error: If statement list must have 4 elements {at_line(lisp_statement.lparen)}')
                         statements.syntax_list.append(
                             SyntaxStatementIf(
+                                lisp_statement,
                                 syntax_parse_var_or_const_or_func_call(lisp_statement.elements[1]),
                                 syntax_parse_statement_list(lisp_statement.elements[2]),
                                 syntax_parse_statement_list(lisp_statement.elements[3]),
@@ -252,6 +260,7 @@ def syntax_parse_statement_list(lisp_statement_list: LispList | TokenIdentifier)
                             panic(f'Error: While statement list must have 3 elements {at_line(lisp_statement.lparen)}')
                         statements.syntax_list.append(
                             SyntaxStatementWhile(
+                                lisp_statement,
                                 syntax_parse_var_or_const_or_func_call(lisp_statement.elements[1]),
                                 syntax_parse_statement_list(lisp_statement.elements[2]),
                             )
@@ -260,7 +269,10 @@ def syntax_parse_statement_list(lisp_statement_list: LispList | TokenIdentifier)
                         if len(lisp_statement.elements) != 2:
                             panic(f'Error: Return statement list must have 2 elements {at_line(lisp_statement.lparen)}')
                         statements.syntax_list.append(
-                            SyntaxStatementReturn(syntax_parse_var_or_const_or_func_call(lisp_statement.elements[1]))
+                            SyntaxStatementReturn(
+                                lisp_statement,
+                                syntax_parse_var_or_const_or_func_call(lisp_statement.elements[1])
+                            )
                         )
                     else:
                         panic(f'Error: Statement name is not valid {at_line(statement_name)}')
@@ -320,9 +332,10 @@ def main():
 
     fn_defs = tuple(syntax_parse_function_definitions(lisp_tree))
     for fn_def in fn_defs:
+        if len(fn_def.statements.syntax_list) == 0:
+            panic(f'Error: Function statement list must have at least one statement {at_line(fn_def.statements.lisp_list)}')
         if not isinstance(fn_def.statements.syntax_list[-1], SyntaxStatementReturn):
-            panic(f'Error: Last statement in function definition statement list must be return statement {at_line()}')
-        print(fn_def.name)
+            panic(f'Error: Last statement in function definition statement list must be return statement {at_line(fn_def.statements.lisp_list)}')
 
         
 
