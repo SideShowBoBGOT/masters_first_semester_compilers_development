@@ -303,6 +303,9 @@ def main():
 
     fn_defs = tuple(syntax_parse_function_definitions(lisp_tree))
     for fn_def in fn_defs:
+        if not isinstance(fn_def.statements[-1], SyntaxStatementReturn):
+            panic(f'Error: Last statement in function definition statement list must be return statement {at_line()}')
+        fn_def.statements
         print(fn_def)
 
         
