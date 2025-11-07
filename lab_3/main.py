@@ -20,9 +20,9 @@ class TokenIdentifier(typing.NamedTuple):
     column_number: int
     value: str
 
-type Token = TokenLparen | TokenRparen | TokenIdentifier
+Token: typing.TypeAlias = TokenLparen | TokenRparen | TokenIdentifier
 
-def panic(msg: str) -> typing.NoReturn:
+def panic(msg: str = '') -> typing.NoReturn:
     print(msg)
     sys.exit(-1)
 
@@ -168,7 +168,7 @@ class SyntaxConstantInt:
 class SyntaxVariable:
     value: TokenIdentifier
 
-type SyntaxVariableOrConstant = SyntaxVariable | SyntaxConstantInt | SyntaxConstantFloat | SyntaxConstantBool
+SyntaxVariableOrConstant: typing.TypeAlias = SyntaxVariable | SyntaxConstantInt | SyntaxConstantFloat | SyntaxConstantBool
 
 def syntax_parse_var_or_const(lisp_element: LispList | TokenIdentifier) -> SyntaxVariableOrConstant:
     if isinstance(lisp_element, TokenIdentifier):
@@ -185,6 +185,7 @@ def syntax_parse_var_or_const(lisp_element: LispList | TokenIdentifier) -> Synta
 
 @dataclasses.dataclass(slots=False)
 class SyntaxFunctionCall:
+    lisp_list: LispList
     name: TokenIdentifier
     arguments: tuple[SyntaxVariableOrConstant, ...]
 
@@ -195,6 +196,7 @@ def syntax_parse_var_or_const_or_func_call(statement_argument: LispList | TokenI
         return syntax_parse_var_or_const(statement_argument)
     else:
         return SyntaxFunctionCall(
+            statement_argument,
             check_atom_identifier(statement_argument.elements[0]),
             tuple(syntax_parse_var_or_const(el) for el in statement_argument.elements[1:])
         )
@@ -223,7 +225,7 @@ class SyntaxStatementWhile:
     condition: SyntaxVarOrConstOrFuncCall
     statements: SyntaxList['SyntaxStatement']
 
-type SyntaxStatement = SyntaxStatementSet | SyntaxStatementIf | SyntaxStatementWhile | SyntaxStatementReturn
+SyntaxStatement = SyntaxStatementSet | SyntaxStatementIf | SyntaxStatementWhile | SyntaxStatementReturn
 
 def syntax_parse_statement_list(lisp_statement_list: LispList | TokenIdentifier) -> SyntaxList[SyntaxStatement]:
     if isinstance(lisp_statement_list, LispList):
@@ -320,6 +322,59 @@ def syntax_parse_function_definitions(lisp_tree: LispList) -> typing.Iterator[Sy
         else:
             panic(f'Error: Function definition must be a list {at_line(fn_def)}')
 
+
+
+def check_indetifier_is_function_param_or_var(fn_def: SyntaxFunctionDefinition, token: TokenIdentifier):
+    for var in fn_def.arguments.syntax_list:
+        if var.token.value == token.value:
+            return
+    for var in fn_def.variables.syntax_list:
+        if var.token.value == token.value:
+            return
+    panic(f'Error: token "{token.value}" is not a variable nor parameter {at_line(token)}')
+
+def get_variable_type(fn_def: SyntaxFunctionDefinition, token: TokenIdentifier) -> VarType:
+    for var in fn_def.arguments.syntax_list:
+        if var.token.value == token.value:
+            return var.vartype
+    for var in fn_def.variables.syntax_list:
+        if var.token.value == token.value:
+            return var.vartype
+    panic(f'Error: token "{token.value}" is not a variable nor parameter {at_line(token)}')
+
+def check_statement_list(fn_defs: tuple[SyntaxFunctionDefinition, ...], current_fn_def: SyntaxFunctionDefinition, statements: SyntaxList[SyntaxStatement]):
+    for statement in statements.syntax_list:
+        if isinstance(statement, SyntaxStatementSet):
+            check_indetifier_is_function_param_or_var(current_fn_def, statement.dest)
+            dest_type = get_variable_type(current_fn_def, statement.dest)
+            if isinstance(statement.src, SyntaxVariable):
+                src_type = get_variable_type(current_fn_def, statement.src.value)
+            elif isinstance(statement.src, SyntaxConstantBool):
+                src_type = VarType.BOOL
+            elif isinstance(statement.src, SyntaxConstantFloat):
+                src_type = VarType.FLOAT
+            elif isinstance(statement.src, SyntaxConstantInt):
+                src_type = VarType.INT
+            elif isinstance(statement.src, SyntaxFunctionCall):
+                statement.src.name
+                pass
+            else:
+                panic('Compiler Error: unreachable')
+            if dest_type != src_type:
+                panic(f'Error: type mismatch between dest and src values in set statement {at_line(statement.dest)}')
+        if isinstance(statement, SyntaxStatementIf):
+            check_statement_list(fn_defs, current_fn_def, statement.true_branch)
+            check_statement_list(fn_defs, current_fn_def, statement.false_branch)
+        if isinstance(statement, SyntaxStatementWhile):
+            check_statement_list(fn_defs, current_fn_def, statement.statements)
+        if isinstance(statement, SyntaxStatementReturn):
+            if isinstance(statement.value, SyntaxVariable):
+                check_indetifier_is_function_param_or_var(current_fn_def, statement.value)
+            elif isinstance(statement.value, SyntaxFunctionDefinition):
+                pass
+                
+
+
 def main():
     filepath = 'example.txt'
     lparens: list[TokenLparen] = []
@@ -332,12 +387,15 @@ def main():
 
     fn_defs = tuple(syntax_parse_function_definitions(lisp_tree))
     for fn_def in fn_defs:
+        for el in fn_def.statements.syntax_list[:-1]:
+            if isinstance(el, SyntaxStatementReturn):
+                panic(f'Error: Return statement must be the last one {at_line(el.lisp_list)}')
         if len(fn_def.statements.syntax_list) == 0:
             panic(f'Error: Function statement list must have at least one statement {at_line(fn_def.statements.lisp_list)}')
         if not isinstance(fn_def.statements.syntax_list[-1], SyntaxStatementReturn):
             panic(f'Error: Last statement in function definition statement list must be return statement {at_line(fn_def.statements.lisp_list)}')
-
         
+        check_statement_list(fn_defs, fn_def.statements)
 
 if __name__ == '__main__':
     main()
