@@ -1,10 +1,3 @@
-(fn ** float ((a int) (b int)) ((i int)) (
-    (set i 0)
-    (while (le i b) (
-        (set a (* a a))
-    ))
-    (return i)
-))
 (fn main int
     ((a int) (b float) (c float))
     ((x int) (y float) (z float))

@@ -20,7 +20,7 @@ class TokenIdentifier(typing.NamedTuple):
     column_number: int
     value: str
 
-Token: typing.TypeAlias = TokenLparen | TokenRparen | TokenIdentifier
+type Token = TokenLparen | TokenRparen | TokenIdentifier
 
 def panic(msg: str) -> typing.NoReturn:
     print(msg)
@@ -96,8 +96,6 @@ class VarType(enum.StrEnum):
     FLOAT = 'float'
     BOOL = 'bool'
 
-
-
 @dataclasses.dataclass(slots=True)
 class SyntaxFunctionDefinition:
     name: str = ''
@@ -115,26 +113,39 @@ class VarTypePair(typing.NamedTuple):
     t: VarType
 
 def syntax_parse_arg_list(arg_list: LispList | TokenIdentifier):
-    if not isinstance(arg_list, LispList):
+    if isinstance(arg_list, LispList):
+        syn_arg_list: list[VarTypePair] = []
+        for name_type_pair in arg_list.elements:
+            if isinstance(name_type_pair, LispList):
+                if len(name_type_pair.elements) != 2:
+                    panic(f'Error: Name type pair must have 2 elements {at_line(name_type_pair.lparen)}')
+                arg_name = name_type_pair.elements[0]
+                if isinstance(arg_name, TokenIdentifier):
+                    if IDENTIFIER_RE.fullmatch(arg_name.value) is None:
+                        panic(f'Error: Argument name does not match identifier pattern {at_line(arg_name)}')
+                    arg_type = name_type_pair.elements[1]
+                    if isinstance(arg_type, TokenIdentifier):
+                        if arg_type.value not in VarType:
+                            panic(f'Error: Argument type is not valid {at_line(arg_type)}')
+                        syn_arg_list.append(VarTypePair(arg_name.value, VarType(arg_type.value)))
+                    else:
+                        panic(f'Error: Argument type must be an atom {at_line(arg_type.lparen)}')
+                else:
+                    panic(f'Error: Argument name must be an atom {at_line(arg_name.lparen)}')
+            else:
+                panic(f'Error: Name type pair must be a list {at_line(name_type_pair)}')
+        return syn_arg_list
+    else:
         panic(f'Error: Argument list must be a list {at_line(arg_list)}')
-    syn_arg_list: list[VarTypePair] = []
-    for name_type_pair in arg_list.elements:
-        if not isinstance(name_type_pair, LispList):
-            panic(f'Error: Name type pair must be a list {at_line(name_type_pair)}')
-        if len(name_type_pair.elements) != 2:
-            panic(f'Error: Name type pair must have 2 elements {at_line(name_type_pair.lparen)}')
-        arg_name = name_type_pair.elements[0]
-        if not isinstance(arg_name, TokenIdentifier):
-            panic(f'Error: Argument name must be an atom {at_line(arg_name.lparen)}')
-        if IDENTIFIER_RE.fullmatch(arg_name.value) is None:
-            panic(f'Error: Argument name does not match identifier pattern {at_line(arg_name)}')
-        arg_type = name_type_pair.elements[1]
-        if not isinstance(arg_type, TokenIdentifier):
-            panic(f'Error: Argument type must be an atom {at_line(arg_type.lparen)}')
-        if arg_type.value not in VarType:
-            panic(f'Error: Argument type is not valid {at_line(arg_type)}')
-        syn_arg_list.append(VarTypePair(arg_name.value, VarType(arg_type.value)))
-    return syn_arg_list
+
+def check_atom_identifier(lisp_element: LispList | TokenIdentifier) -> TokenIdentifier:
+    if isinstance(lisp_element, TokenIdentifier):
+        if IDENTIFIER_RE.fullmatch(lisp_element.value):
+            return lisp_element
+        else:
+            panic(f'Error: Element is not valid identifier {at_line(lisp_element)}')
+    else:
+        panic(f'Error: Element must be an atom {at_line(lisp_element.lparen)}')
 
 class SyntaxBool(enum.StrEnum):
     TRUE = 'true'
@@ -156,7 +167,7 @@ class SyntaxConstantInt:
 class SyntaxVariable:
     value: TokenIdentifier
 
-SyntaxVariableOrConstant = typing.Union[SyntaxVariable, SyntaxConstantInt, SyntaxConstantFloat, SyntaxConstantBool]
+type SyntaxVariableOrConstant = SyntaxVariable | SyntaxConstantInt | SyntaxConstantFloat | SyntaxConstantBool
 
 def syntax_parse_var_or_const(lisp_element: LispList | TokenIdentifier) -> SyntaxVariableOrConstant:
     if isinstance(lisp_element, TokenIdentifier):
@@ -171,34 +182,48 @@ def syntax_parse_var_or_const(lisp_element: LispList | TokenIdentifier) -> Synta
     else:
         panic(f'Error: Element must be an atom {at_line(lisp_element.lparen)}')
 
-def syntax_parse_statement_argument(statement_argument: LispList | TokenIdentifier):
+@dataclasses.dataclass(slots=False)
+class SyntaxFunctionCall:
+    name: TokenIdentifier
+    arguments: list[SyntaxVariableOrConstant]
+
+type SyntaxVarOrConstOrFuncCall = SyntaxVariableOrConstant | SyntaxFunctionCall
+
+def syntax_parse_var_or_const_or_func_call(statement_argument: LispList | TokenIdentifier) -> SyntaxVarOrConstOrFuncCall:
     if isinstance(statement_argument, TokenIdentifier):
         return syntax_parse_var_or_const(statement_argument)
     else:
-        statement_argument.
-
+        name = check_atom_identifier(statement_argument.elements[0])
+        arguments: list[SyntaxVariableOrConstant] = []
+        for el in statement_argument.elements[1:]:
+            arguments.append(syntax_parse_var_or_const(el))
+        return SyntaxFunctionCall(name, arguments)
 
 @dataclasses.dataclass(slots=True)
 class SyntaxStatementSet:
-    dest: str
-    # src: 
+    dest: TokenIdentifier
+    src: SyntaxVarOrConstOrFuncCall
 
 @dataclasses.dataclass(slots=True)
 class SyntaxStatementReturn:
-    var: str
+    value: SyntaxVarOrConstOrFuncCall
 
-def check_atom_identifier(lisp_element: LispList | TokenIdentifier) -> str:
-    if isinstance(lisp_element, TokenIdentifier):
-        if IDENTIFIER_RE.fullmatch(lisp_element.value):
-            panic(f'Error: Element is not valid identifier {at_line(lisp_element)}')
-            return lisp_element.value
-        else:
-            panic(f'Error: Element is not valid identifier {at_line(lisp_element)}')
-    else:
-        panic(f'Error: Element must be an atom {at_line(lisp_element.lparen)}')
+@dataclasses.dataclass(slots=True)
+class SyntaxStatementIf:
+    condition: SyntaxVarOrConstOrFuncCall
+    true_branch: list['SyntaxStatement']
+    false_branch: list['SyntaxStatement']
 
-def syntax_parse_statement_list(lisp_statement_list: LispList | TokenIdentifier):
+@dataclasses.dataclass(slots=True)
+class SyntaxStatementWhile:
+    condition: SyntaxVarOrConstOrFuncCall
+    statements: list['SyntaxStatement']
+
+type SyntaxStatement = SyntaxStatementSet | SyntaxStatementIf | SyntaxStatementWhile | SyntaxStatementReturn
+
+def syntax_parse_statement_list(lisp_statement_list: LispList | TokenIdentifier) -> list[SyntaxStatement]:
     if isinstance(lisp_statement_list, LispList):
+        statements: list[SyntaxStatement] = []
         for lisp_statement in lisp_statement_list.elements:
             if isinstance(lisp_statement, LispList):
                 if len(lisp_statement.elements) == 0:
@@ -206,26 +231,46 @@ def syntax_parse_statement_list(lisp_statement_list: LispList | TokenIdentifier)
                 statement_name = lisp_statement.elements[0]
                 if isinstance(statement_name, TokenIdentifier):
                     if statement_name.value == 'set':
-                        if len(lisp_statement_list.elements) != 3:
-                            panic(f'Error: Set statement list must have 3 elements {at_line(lisp_statement_list.lparen)}')
-                        var = check_atom_identifier(lisp_statement_list.elements[1])
-                        if isinstance(lisp_statement_list.elements[2])
-                        # yield SyntaxStatementReturn(check_atom_identifier(lisp_statement_list.elements[1]))
+                        if len(lisp_statement.elements) != 3:
+                            panic(f'Error: Set statement list must have 3 elements {at_line(lisp_statement.lparen)}')
+                        statements.append(
+                            SyntaxStatementSet(
+                                check_atom_identifier(lisp_statement.elements[1]),
+                                syntax_parse_var_or_const_or_func_call(lisp_statement.elements[2])
+                            )
+                        )
                     elif statement_name.value == 'if':
-                        pass
+                        if len(lisp_statement.elements) != 4:
+                            panic(f'Error: If statement list must have 4 elements {at_line(lisp_statement.lparen)}')
+                        statements.append(
+                            SyntaxStatementIf(
+                                syntax_parse_var_or_const_or_func_call(lisp_statement.elements[1]),
+                                syntax_parse_statement_list(lisp_statement.elements[2]),
+                                syntax_parse_statement_list(lisp_statement.elements[3]),
+                            )
+                        )
                     elif statement_name.value == 'while':
-
-                        pass
+                        if len(lisp_statement.elements) != 3:
+                            panic(f'Error: While statement list must have 3 elements {at_line(lisp_statement.lparen)}')
+                        statements.append(
+                            SyntaxStatementWhile(
+                                syntax_parse_var_or_const_or_func_call(lisp_statement.elements[1]),
+                                syntax_parse_statement_list(lisp_statement.elements[2]),
+                            )
+                        )
                     elif statement_name.value == 'return':
-                        if len(lisp_statement_list.elements) != 2:
-                            panic(f'Error: Return statement list must have 2 elements {at_line(lisp_statement_list.lparen)}')
-                        yield SyntaxStatementReturn(check_atom_identifier(lisp_statement_list.elements[1]))
+                        if len(lisp_statement.elements) != 2:
+                            panic(f'Error: Return statement list must have 2 elements {at_line(lisp_statement.lparen)}')
+                        statements.append(
+                            SyntaxStatementReturn(syntax_parse_var_or_const_or_func_call(lisp_statement.elements[1]))
+                        )
                     else:
                         panic(f'Error: Statement name is not valid {at_line(statement_name)}')
                 else:
                     panic(f'Error: Statement name must be an atom {at_line(statement_name.lparen)}')
             else:
                 panic(f'Error: Statement must be a list {at_line(lisp_statement)}')
+        return statements 
     else:
         panic(f'Error: Statement list must be a list {at_line(lisp_statement_list)}')
 
@@ -243,29 +288,33 @@ def main():
     fn_defs: list[SyntaxFunctionDefinition] = []
     for fn_def in lisp_tree.elements:
         syn_fn_def = SyntaxFunctionDefinition()
-        if not isinstance(fn_def, LispList):
+        if isinstance(fn_def, LispList):
+            if len(fn_def.elements) != 6:
+                panic('')
+            if isinstance(fn_def.elements[0], TokenIdentifier):
+                if fn_def.elements[0].value != 'fn':
+                    panic(f'Error: Function must start with fn {at_line(fn_def.elements[0])}')
+                if isinstance(fn_def.elements[1], TokenIdentifier):
+                    if IDENTIFIER_RE.fullmatch(fn_def.elements[1].value) is None:
+                        panic(f'Error: Function name does not match identifier pattern {at_line(fn_def.elements[1])}')
+                    syn_fn_def.name = fn_def.elements[1].value
+                    if isinstance(fn_def.elements[2], TokenIdentifier):
+                        if fn_def.elements[2].value not in VarType:
+                            panic(f'Error: Function return type is not valid {at_line(fn_def.elements[2])}')
+                        syn_fn_def.return_type = VarType(fn_def.elements[2].value)
+                        syn_fn_def.arguments = syntax_parse_arg_list(fn_def.elements[3])
+                        syn_fn_def.variables = syntax_parse_arg_list(fn_def.elements[4])
+                        syn_fn_def.statements = syntax_parse_statement_list(fn_def.elements[5])
+                        fn_defs.append(syn_fn_def)
+                    else:
+                        panic(f'Error: Function return type must be an atom {at_line(fn_def.elements[2].lparen)}')
+                else:
+                    panic(f'Error: Function name must be an atom {at_line(fn_def.elements[1].lparen)}')
+            else:
+                panic(f'Error: Function must start with atom {at_line(fn_def.elements[0].lparen)}')
+        else:
             panic(f'Error: Function definition must be a list {at_line(fn_def)}')
-        if len(fn_def.elements) != 6:
-            panic('')
-        if not isinstance(fn_def.elements[0], TokenIdentifier):
-            panic(f'Error: Function must start with atom {at_line(fn_def.elements[0].lparen)}')
-        if fn_def.elements[0].value != 'fn':
-            panic(f'Error: Function must start with fn {at_line(fn_def.elements[0])}')
-        if not isinstance(fn_def.elements[1], TokenIdentifier):
-            panic(f'Error: Function name must be an atom {at_line(fn_def.elements[1].lparen)}')
-        if IDENTIFIER_RE.fullmatch(fn_def.elements[1].value) is None:
-            panic(f'Error: Function name does not match identifier pattern {at_line(fn_def.elements[1])}')
-        syn_fn_def.name = fn_def.elements[1].value
-        if not isinstance(fn_def.elements[2], TokenIdentifier):
-            panic(f'Error: Function return type must be an atom {at_line(fn_def.elements[2].lparen)}')
-        if fn_def.elements[2].value not in VarType:
-            panic(f'Error: Function return type is not valid {at_line(fn_def.elements[2])}')
-        syn_fn_def.return_type = VarType(fn_def.elements[2].value)
-        syn_fn_def.arguments = syntax_parse_arg_list(fn_def.elements[3])
-        syn_fn_def.variables = syntax_parse_arg_list(fn_def.elements[4])
-        syn_fn_def.statements = syntax_parse_statement_list(fn_def.elements[5])
-        fn_defs.append(syn_fn_def)
-
+        
 
 if __name__ == '__main__':
     main()
