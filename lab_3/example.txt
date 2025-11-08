@@ -1,20 +1,19 @@
 (fn main int
-    ((a int) (b float) (c float))
-    ((x int) (y float) (z float))
+    ((a int) (b int) (c float))
+    ((x int) (i int) (y float) (z float))
 (
-    (set _ (* 2 c))
-    (set d 12)
+    (set a (* 2 b))
+    (set b 12)
     (if (== 55 104) (
-        (set d 33.23122222)
+        (set y 33.23122222)
         (set a b)
     ) (
-        (set g c)
+        (set z c)
     ))
     (set i 0)
     (while (< i 5) (
-        (set k (* 2 a))
         (set i (+ i 1))
     ))
-    (return 0)
+    (return (* 1 2))
 ))
 

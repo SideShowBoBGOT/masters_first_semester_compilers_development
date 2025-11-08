@@ -22,7 +22,10 @@ class TokenIdentifier(typing.NamedTuple):
 
 Token: typing.TypeAlias = TokenLparen | TokenRparen | TokenIdentifier
 
+
 def panic(msg: str = '') -> typing.NoReturn:
+    import traceback
+    traceback.print_stack()
     print(msg)
     sys.exit(-1)
 
@@ -99,7 +102,6 @@ class VarType(enum.StrEnum):
     FLOAT = 'float'
     BOOL = 'bool'
 
-
 IDENTIFIER_RE = re.compile("[a-zA-Z!$%&*/:<=>?^_~][a-zA-Z!$%&*/:<=>?^_~0-9]*|[+]|[-]")
 INT_RE = re.compile("[+-]?[0-9]+")
 FLOAT_RE = re.compile("[+-]?[0-9]+[.][0-9]+")
@@ -168,7 +170,7 @@ class SyntaxConstantInt:
 class SyntaxVariable:
     value: TokenIdentifier
 
-SyntaxVariableOrConstant: typing.TypeAlias = SyntaxVariable | SyntaxConstantInt | SyntaxConstantFloat | SyntaxConstantBool
+SyntaxVariableOrConstant = SyntaxVariable | SyntaxConstantInt | SyntaxConstantFloat | SyntaxConstantBool
 
 def syntax_parse_var_or_const(lisp_element: LispList | TokenIdentifier) -> SyntaxVariableOrConstant:
     if isinstance(lisp_element, TokenIdentifier):
@@ -189,7 +191,7 @@ class SyntaxFunctionCall:
     name: TokenIdentifier
     arguments: tuple[SyntaxVariableOrConstant, ...]
 
-type SyntaxVarOrConstOrFuncCall = SyntaxVariableOrConstant | SyntaxFunctionCall
+SyntaxVarOrConstOrFuncCall = SyntaxVariableOrConstant | SyntaxFunctionCall
 
 def syntax_parse_var_or_const_or_func_call(statement_argument: LispList | TokenIdentifier) -> SyntaxVarOrConstOrFuncCall:
     if isinstance(statement_argument, TokenIdentifier):
@@ -342,38 +344,136 @@ def get_variable_type(fn_def: SyntaxFunctionDefinition, token: TokenIdentifier) 
             return var.vartype
     panic(f'Error: token "{token.value}" is not a variable nor parameter {at_line(token)}')
 
+def get_type_var_or_const(fn_def: SyntaxFunctionDefinition, var: SyntaxVariableOrConstant) -> VarType: 
+    if isinstance(var, SyntaxVariable):
+        return get_variable_type(fn_def, var.value)
+    elif isinstance(var, SyntaxConstantBool):
+        return VarType.BOOL
+    elif isinstance(var, SyntaxConstantFloat):
+        return VarType.FLOAT
+    elif isinstance(var, SyntaxConstantInt):
+        return VarType.INT
+    else:
+        panic('unreachable')
+
+class BuiltinFunction(typing.NamedTuple):
+    name: str
+    return_type: VarType
+    argtypes: tuple[VarType, ...]
+
+BULTIN_FUNCTIONS = (
+    BuiltinFunction('==', VarType.BOOL, (VarType.INT, VarType.INT)),
+    BuiltinFunction('==', VarType.BOOL, (VarType.BOOL, VarType.BOOL)),
+
+    BuiltinFunction('*', VarType.INT, (VarType.INT, VarType.INT)),
+    BuiltinFunction('/', VarType.INT, (VarType.INT, VarType.INT)),
+    BuiltinFunction('+', VarType.INT, (VarType.INT, VarType.INT)),
+    BuiltinFunction('-', VarType.INT, (VarType.INT, VarType.INT)),
+
+    BuiltinFunction('>', VarType.BOOL, (VarType.INT, VarType.INT)),
+    BuiltinFunction('<', VarType.BOOL, (VarType.INT, VarType.INT)),
+    BuiltinFunction('>=', VarType.BOOL, (VarType.INT, VarType.INT)),
+    BuiltinFunction('<=', VarType.BOOL, (VarType.INT, VarType.INT)),
+
+    BuiltinFunction('*', VarType.FLOAT, (VarType.FLOAT, VarType.FLOAT)),
+    BuiltinFunction('/', VarType.FLOAT, (VarType.FLOAT, VarType.FLOAT)),
+    BuiltinFunction('+', VarType.FLOAT, (VarType.FLOAT, VarType.FLOAT)),
+    BuiltinFunction('-', VarType.FLOAT, (VarType.FLOAT, VarType.FLOAT)),
+
+    BuiltinFunction('>', VarType.BOOL, (VarType.FLOAT, VarType.FLOAT)),
+    BuiltinFunction('<', VarType.BOOL, (VarType.FLOAT, VarType.FLOAT)),
+)
+
+def find_matching_func_def_for_func_call(
+    func_call: SyntaxFunctionCall,
+    fn_defs: typing.Iterable[SyntaxFunctionDefinition],
+    current_fn_def: SyntaxFunctionDefinition
+) -> BuiltinFunction | SyntaxFunctionDefinition:
+    func_call_types = list(get_type_var_or_const(current_fn_def, el) for el in func_call.arguments)
+    for fn_def in fn_defs:
+        if func_call.name.value != fn_def.name:
+            continue
+        if len(func_call.arguments) != len(fn_def.arguments.syntax_list):
+            continue
+        fn_def_arg_types = list(el.vartype for el in fn_def.arguments.syntax_list)
+        if any(t1 != t2 for t1, t2 in zip(func_call_types, fn_def_arg_types)):
+            continue
+        return fn_def
+    for builtin in BULTIN_FUNCTIONS:
+        if func_call.name.value != builtin.name:
+            continue
+        if len(func_call.arguments) != len(builtin.argtypes):
+            continue
+        if any(t1 != t2 for t1, t2 in zip(func_call_types, builtin.argtypes)):
+            continue
+        return builtin
+    panic(f'Error: Function call does not match any functions {at_line(func_call.lisp_list)}')
+
 def check_statement_list(fn_defs: tuple[SyntaxFunctionDefinition, ...], current_fn_def: SyntaxFunctionDefinition, statements: SyntaxList[SyntaxStatement]):
     for statement in statements.syntax_list:
         if isinstance(statement, SyntaxStatementSet):
             check_indetifier_is_function_param_or_var(current_fn_def, statement.dest)
             dest_type = get_variable_type(current_fn_def, statement.dest)
-            if isinstance(statement.src, SyntaxVariable):
-                src_type = get_variable_type(current_fn_def, statement.src.value)
-            elif isinstance(statement.src, SyntaxConstantBool):
-                src_type = VarType.BOOL
-            elif isinstance(statement.src, SyntaxConstantFloat):
-                src_type = VarType.FLOAT
-            elif isinstance(statement.src, SyntaxConstantInt):
-                src_type = VarType.INT
+            if isinstance(statement.src, SyntaxVariableOrConstant):
+                src_type = get_type_var_or_const(current_fn_def, statement.src)
             elif isinstance(statement.src, SyntaxFunctionCall):
-                statement.src.name
-                pass
+                func = find_matching_func_def_for_func_call(statement.src, fn_defs, current_fn_def)                    
+                src_type = func.return_type
             else:
                 panic('Compiler Error: unreachable')
             if dest_type != src_type:
                 panic(f'Error: type mismatch between dest and src values in set statement {at_line(statement.dest)}')
-        if isinstance(statement, SyntaxStatementIf):
+        elif isinstance(statement, SyntaxStatementIf):
+            if isinstance(statement.condition, SyntaxVariableOrConstant):
+                ret_type = get_type_var_or_const(current_fn_def, statement.condition)
+            elif isinstance(statement.condition, SyntaxFunctionCall):
+                func = find_matching_func_def_for_func_call(statement.condition, fn_defs, current_fn_def)                    
+                if isinstance(func, SyntaxFunctionDefinition):
+                    ret_type = func.return_type.vartype
+                elif isinstance(func, BuiltinFunction):
+                    ret_type = func.return_type
+                else:
+                    panic(f'unreachable')
+            else:
+                panic(f'unreachable')
+            if ret_type != VarType.BOOL:
+                panic(f'Error: Condition must be bool {at_line(statement.lisp_list)}')
+
             check_statement_list(fn_defs, current_fn_def, statement.true_branch)
             check_statement_list(fn_defs, current_fn_def, statement.false_branch)
-        if isinstance(statement, SyntaxStatementWhile):
+        elif isinstance(statement, SyntaxStatementWhile):
+            if isinstance(statement.condition, SyntaxVariableOrConstant):
+                ret_type = get_type_var_or_const(current_fn_def, statement.condition)
+            elif isinstance(statement.condition, SyntaxFunctionCall):
+                func = find_matching_func_def_for_func_call(statement.condition, fn_defs, current_fn_def)                    
+                if isinstance(func, SyntaxFunctionDefinition):
+                    ret_type = func.return_type.vartype
+                elif isinstance(func, BuiltinFunction):
+                    ret_type = func.return_type
+                else:
+                    panic(f'unreachable')
+            else:
+                panic(f'unreachable')
+            if ret_type != VarType.BOOL:
+                panic(f'Error: Condition must be bool {at_line(statement.lisp_list)}')
             check_statement_list(fn_defs, current_fn_def, statement.statements)
-        if isinstance(statement, SyntaxStatementReturn):
-            if isinstance(statement.value, SyntaxVariable):
-                check_indetifier_is_function_param_or_var(current_fn_def, statement.value)
-            elif isinstance(statement.value, SyntaxFunctionDefinition):
-                pass
-                
-
+        elif isinstance(statement, SyntaxStatementReturn):
+            if isinstance(statement.value, SyntaxVariableOrConstant):
+                ret_type = get_type_var_or_const(current_fn_def, statement.value)
+            elif isinstance(statement.value, SyntaxFunctionCall):
+                func = find_matching_func_def_for_func_call(statement.value, fn_defs, current_fn_def)                    
+                if isinstance(func, SyntaxFunctionDefinition):
+                    ret_type = func.return_type.vartype
+                elif isinstance(func, BuiltinFunction):
+                    ret_type = func.return_type
+                else:
+                    panic(f'unreachable')
+            else:
+                panic(f'unreachable')
+            if current_fn_def.return_type.vartype != ret_type:
+                panic(f'Function does not return value of return type {at_line(statement.lisp_list)}')
+        else:
+            panic(f'unreachable')
 
 def main():
     filepath = 'example.txt'
@@ -395,7 +495,7 @@ def main():
         if not isinstance(fn_def.statements.syntax_list[-1], SyntaxStatementReturn):
             panic(f'Error: Last statement in function definition statement list must be return statement {at_line(fn_def.statements.lisp_list)}')
         
-        check_statement_list(fn_defs, fn_def.statements)
+        check_statement_list(fn_defs, fn_def, fn_def.statements)
 
 if __name__ == '__main__':
     main()
