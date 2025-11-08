@@ -409,7 +409,7 @@ def find_matching_func_def_for_func_call(
         return builtin
     panic(f'Error: Function call does not match any functions {at_line(func_call.lisp_list)}')
 
-def check_statement_list(fn_defs: tuple[SyntaxFunctionDefinition, ...], current_fn_def: SyntaxFunctionDefinition, statements: SyntaxList[SyntaxStatement]):
+def check_statement_list(fn_defs: typing.Iterable[SyntaxFunctionDefinition], current_fn_def: SyntaxFunctionDefinition, statements: SyntaxList[SyntaxStatement]):
     for statement in statements.syntax_list:
         if isinstance(statement, SyntaxStatementSet):
             check_indetifier_is_function_param_or_var(current_fn_def, statement.dest)
@@ -475,6 +475,18 @@ def check_statement_list(fn_defs: tuple[SyntaxFunctionDefinition, ...], current_
         else:
             panic(f'unreachable')
 
+def check_function_definitions(fn_defs: typing.Iterable[SyntaxFunctionDefinition]):
+    for fn_def in fn_defs:
+        for el in fn_def.statements.syntax_list[:-1]:
+            if isinstance(el, SyntaxStatementReturn):
+                panic(f'Error: Return statement must be the last one {at_line(el.lisp_list)}')
+        if len(fn_def.statements.syntax_list) == 0:
+            panic(f'Error: Function statement list must have at least one statement {at_line(fn_def.statements.lisp_list)}')
+        if not isinstance(fn_def.statements.syntax_list[-1], SyntaxStatementReturn):
+            panic(f'Error: Last statement in function definition statement list must be return statement {at_line(fn_def.statements.lisp_list)}')
+        
+        check_statement_list(fn_defs, fn_def, fn_def.statements)
+
 def main():
     filepath = 'example.txt'
     lparens: list[TokenLparen] = []
@@ -486,16 +498,8 @@ def main():
     del lparens
 
     fn_defs = tuple(syntax_parse_function_definitions(lisp_tree))
-    for fn_def in fn_defs:
-        for el in fn_def.statements.syntax_list[:-1]:
-            if isinstance(el, SyntaxStatementReturn):
-                panic(f'Error: Return statement must be the last one {at_line(el.lisp_list)}')
-        if len(fn_def.statements.syntax_list) == 0:
-            panic(f'Error: Function statement list must have at least one statement {at_line(fn_def.statements.lisp_list)}')
-        if not isinstance(fn_def.statements.syntax_list[-1], SyntaxStatementReturn):
-            panic(f'Error: Last statement in function definition statement list must be return statement {at_line(fn_def.statements.lisp_list)}')
-        
-        check_statement_list(fn_defs, fn_def, fn_def.statements)
+    check_function_definitions(fn_defs)
+
 
 if __name__ == '__main__':
     main()

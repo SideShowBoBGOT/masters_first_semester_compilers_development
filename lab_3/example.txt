@@ -8,7 +8,7 @@
         (set y 33.23122222)
         (set a b)
     ) (
-        (set z c)
+        (set z 3444.0)
     ))
     (set i 0)
     (while (< i 5) (
