@@ -289,6 +289,7 @@ def syntax_parse_statement_list(lisp_statement_list: LispList | TokenIdentifier)
         panic(f'Error: Statement list must be a list {at_line(lisp_statement_list)}')
 
 class SyntaxFunctionDefinition(typing.NamedTuple):
+    lisp_list: LispList
     name: TokenIdentifier 
     return_type: VarTypePair
     arguments: SyntaxList[VarTypePair]
@@ -314,7 +315,7 @@ def syntax_parse_function_definitions(lisp_tree: LispList) -> typing.Iterator[Sy
                         syn_fn_def_arguments = syntax_parse_arg_list(fn_def.elements[3])
                         syn_fn_def_variables = syntax_parse_arg_list(fn_def.elements[4])
                         syn_fn_def_statements = syntax_parse_statement_list(fn_def.elements[5])
-                        yield SyntaxFunctionDefinition(syn_fn_def_name, syn_fn_def_return_type, syn_fn_def_arguments, syn_fn_def_variables, syn_fn_def_statements)
+                        yield SyntaxFunctionDefinition(fn_def, syn_fn_def_name, syn_fn_def_return_type, syn_fn_def_arguments, syn_fn_def_variables, syn_fn_def_statements)
                     else:
                         panic(f'Error: Function return type must be an atom {at_line(fn_def.elements[2].lparen)}')
                 else:
@@ -477,7 +478,7 @@ def check_statement_list(fn_defs: typing.Iterable[SyntaxFunctionDefinition], cur
 
 import itertools
 
-def check_function_definitions(fn_defs: typing.Iterable[SyntaxFunctionDefinition]):
+def check_function_definitions(fn_defs: tuple[SyntaxFunctionDefinition, ...]):
     for fn_def in fn_defs:
         for el in fn_def.statements.syntax_list[:-1]:
             if isinstance(el, SyntaxStatementReturn):
@@ -496,6 +497,31 @@ def check_function_definitions(fn_defs: typing.Iterable[SyntaxFunctionDefinition
                     continue
                 if el_one.token.value == el_two.token.value:
                     panic(f'Error: Duplicate argument name {at_line(el_one.token)} and {at_line(el_two.token)}')
+    
+    for i_one, fn_def_one in enumerate(fn_defs):
+        args_one = [el.vartype for el in fn_def_one.arguments.syntax_list]
+        for i_two, fn_def_two in enumerate(fn_defs):
+            if i_one == i_two:
+                continue
+            if fn_def_one.name.value != fn_def_two.name.value:
+                continue
+            args_two = [el.vartype for el in fn_def_two.arguments.syntax_list]
+            if len(args_one) != len(args_two):
+                continue
+            if any(a1 != a2 for a1, a2 in zip(args_one, args_two)):
+                continue
+            panic(f'Error: Duplicate function definitions {at_line(fn_def_one.lisp_list)} and {at_line(fn_def_two.lisp_list)}')
+
+    for fn_def in fn_defs:
+        args_one = [el.vartype for el in fn_def.arguments.syntax_list]
+        for builtin_def in BULTIN_FUNCTIONS:
+            if builtin_def.name != fn_def.name.value:
+                continue
+            if len(args_one) != len(builtin_def.argtypes):
+                continue
+            if any(a1 != a2 for a1, a2 in zip(args_one, builtin_def.argtypes)):
+                continue
+            panic(f'Error: Duplicate function definition with builtin "{builtin_def.name}" {at_line(fn_def_one.lisp_list)}')
     
     for fn_def in fn_defs:
         check_statement_list(fn_defs, fn_def, fn_def.statements)

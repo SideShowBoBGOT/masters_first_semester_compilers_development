@@ -1,5 +1,11 @@
+(fn * int
+    ((b int) (c float))
+    ((x int) (i int) (y float) (z float))
+(
+    (return (* 1 2))
+))
 (fn main int
-    ((a int) (a int) (b int) (c float))
+    ((a int) (b int) (c float))
     ((x int) (i int) (y float) (z float))
 (
     (set a (* 2 b))
