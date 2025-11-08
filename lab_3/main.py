@@ -42,9 +42,9 @@ def tokenize(filepath: pathlib.Path | str) -> typing.Iterator[Token]:
     offset = 0
     line_number = 1
     last_newline_offset = 0
-    column_number = offset - last_newline_offset + 1
 
     while offset < len(data):
+        column_number = offset - last_newline_offset + 1
         subdata = data[offset:]
         if (resmatch := lparen_re.match(subdata)):
             match_len = resmatch.end()
@@ -475,6 +475,8 @@ def check_statement_list(fn_defs: typing.Iterable[SyntaxFunctionDefinition], cur
         else:
             panic(f'unreachable')
 
+import itertools
+
 def check_function_definitions(fn_defs: typing.Iterable[SyntaxFunctionDefinition]):
     for fn_def in fn_defs:
         for el in fn_def.statements.syntax_list[:-1]:
@@ -484,7 +486,18 @@ def check_function_definitions(fn_defs: typing.Iterable[SyntaxFunctionDefinition
             panic(f'Error: Function statement list must have at least one statement {at_line(fn_def.statements.lisp_list)}')
         if not isinstance(fn_def.statements.syntax_list[-1], SyntaxStatementReturn):
             panic(f'Error: Last statement in function definition statement list must be return statement {at_line(fn_def.statements.lisp_list)}')
-        
+
+        VarTypePair.vartype
+        it_first = itertools.chain(fn_def.arguments.syntax_list, fn_def.variables.syntax_list)        
+        it_second = itertools.chain(fn_def.arguments.syntax_list, fn_def.variables.syntax_list)        
+        for i_one, el_one in enumerate(it_first):
+            for i_two, el_two in enumerate(it_second):
+                if i_one == i_two:
+                    continue
+                if el_one.token.value == el_two.token.value:
+                    panic(f'Error: Duplicate argument name {at_line(el_one.token)} and {at_line(el_two.token)}')
+    
+    for fn_def in fn_defs:
         check_statement_list(fn_defs, fn_def, fn_def.statements)
 
 def main():
