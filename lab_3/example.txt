@@ -1,10 +1,5 @@
-(fn * int
-    ((b int) (c float))
-    ((x int) (i int) (y float) (z float))
-(
-    (return (* 1 2))
-))
-(fn main int
+
+(fn my_function int
     ((a int) (b int) (c float))
     ((x int) (i int) (y float) (z float))
 (

@@ -361,28 +361,136 @@ class BuiltinFunction(typing.NamedTuple):
     name: str
     return_type: VarType
     argtypes: tuple[VarType, ...]
+    asm_code: str
+    
 
 BULTIN_FUNCTIONS = (
-    BuiltinFunction('==', VarType.BOOL, (VarType.INT, VarType.INT)),
-    BuiltinFunction('==', VarType.BOOL, (VarType.BOOL, VarType.BOOL)),
+    BuiltinFunction('==', VarType.BOOL, (VarType.INT, VarType.INT),
+"""
+cmp x0, x1
+cset x0, eq
+ret
+"""
+    ),
+    BuiltinFunction('==', VarType.BOOL, (VarType.BOOL, VarType.BOOL),
+"""
+cmp x0, x1
+cset x0, eq
+ret
+"""
+),
+    BuiltinFunction('*', VarType.INT, (VarType.INT, VarType.INT),
+"""
+mul x0, x0, x1
+ret
+"""
+),
+    BuiltinFunction('/', VarType.INT, (VarType.INT, VarType.INT),
+"""
+sdiv x0, x0, x1
+ret
+"""
+),
+    BuiltinFunction('+', VarType.INT, (VarType.INT, VarType.INT),
+"""
+add x0, x0, x1
+ret
+"""
+),
+    BuiltinFunction('-', VarType.INT, (VarType.INT, VarType.INT),
+"""
+sub x0, x0, x1
+ret
+"""
+),
 
-    BuiltinFunction('*', VarType.INT, (VarType.INT, VarType.INT)),
-    BuiltinFunction('/', VarType.INT, (VarType.INT, VarType.INT)),
-    BuiltinFunction('+', VarType.INT, (VarType.INT, VarType.INT)),
-    BuiltinFunction('-', VarType.INT, (VarType.INT, VarType.INT)),
-
-    BuiltinFunction('>', VarType.BOOL, (VarType.INT, VarType.INT)),
-    BuiltinFunction('<', VarType.BOOL, (VarType.INT, VarType.INT)),
-    BuiltinFunction('>=', VarType.BOOL, (VarType.INT, VarType.INT)),
-    BuiltinFunction('<=', VarType.BOOL, (VarType.INT, VarType.INT)),
-
-    BuiltinFunction('*', VarType.FLOAT, (VarType.FLOAT, VarType.FLOAT)),
-    BuiltinFunction('/', VarType.FLOAT, (VarType.FLOAT, VarType.FLOAT)),
-    BuiltinFunction('+', VarType.FLOAT, (VarType.FLOAT, VarType.FLOAT)),
-    BuiltinFunction('-', VarType.FLOAT, (VarType.FLOAT, VarType.FLOAT)),
-
-    BuiltinFunction('>', VarType.BOOL, (VarType.FLOAT, VarType.FLOAT)),
-    BuiltinFunction('<', VarType.BOOL, (VarType.FLOAT, VarType.FLOAT)),
+    BuiltinFunction('>', VarType.BOOL, (VarType.INT, VarType.INT),
+"""
+cmp x0, x1
+cset x0, gt
+ret
+"""
+),
+    BuiltinFunction('<', VarType.BOOL, (VarType.INT, VarType.INT),
+"""
+cmp x0, x1
+cset x0, lt
+ret
+"""
+),
+    BuiltinFunction('>=', VarType.BOOL, (VarType.INT, VarType.INT),
+"""
+cmp x0, x1
+cset x0, ge
+ret
+"""
+),
+    BuiltinFunction('<=', VarType.BOOL, (VarType.INT, VarType.INT),
+"""
+cmp x0, x1
+cset x0, le
+ret
+"""
+),
+    BuiltinFunction('*', VarType.FLOAT, (VarType.FLOAT, VarType.FLOAT),
+"""
+fmul d0, d0, d1
+ret
+"""
+),
+    BuiltinFunction('/', VarType.FLOAT, (VarType.FLOAT, VarType.FLOAT),
+"""
+fdiv d0, d0, d1
+ret
+"""
+),
+    BuiltinFunction('+', VarType.FLOAT, (VarType.FLOAT, VarType.FLOAT),
+"""
+fadd d0, d0, d1
+ret
+"""
+),
+    BuiltinFunction('-', VarType.FLOAT, (VarType.FLOAT, VarType.FLOAT),
+"""
+fsub d0, d0, d1
+ret
+"""
+),
+    BuiltinFunction('==', VarType.BOOL, (VarType.FLOAT, VarType.FLOAT),
+"""
+fcmp d0, d1
+cset x0, eq
+ret
+"""
+),
+    BuiltinFunction('>', VarType.BOOL, (VarType.FLOAT, VarType.FLOAT),
+"""
+fcmp d0, d1
+cset x0, gt
+ret
+"""
+),
+    BuiltinFunction('<', VarType.BOOL, (VarType.FLOAT, VarType.FLOAT),
+"""
+fcmp d0, d1
+cset x0, lt
+ret
+"""
+),
+    BuiltinFunction('>=', VarType.BOOL, (VarType.FLOAT, VarType.FLOAT),
+"""
+fcmp d0, d1
+cset x0, ge
+ret
+"""
+),
+    BuiltinFunction('<=', VarType.BOOL, (VarType.FLOAT, VarType.FLOAT),
+"""
+fcmp d0, d1
+cset x0, le
+ret
+"""
+),
 )
 
 def find_matching_func_def_for_func_call(
