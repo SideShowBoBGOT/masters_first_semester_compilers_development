@@ -665,7 +665,6 @@ def asm_stack_frame(fn_decl: IrFnDecl):
         exit_stack.callback(print, 'ldr fp, [sp]')
         print('mov fp, sp')
         exit_stack.callback(print, 'mov sp, fp')
-    
         int_var_count = 0
         float_var_count = 0
         stack_var_count = 0
@@ -692,6 +691,13 @@ def asm_stack_frame(fn_decl: IrFnDecl):
                         print(f'str d9, [fp, #-{fp_offset}]')
                         stack_var_count += 1
                     float_var_count += 1
+            fp_offset += 16
+        for arg in fn_decl.variables:
+            arg_off[arg] = fp_offset
+            print('sub sp, sp, #16')
+            exit_stack.callback(print, 'add sp, sp, #16')
+            print('mov x9, #0')
+            print(f'str x9, [fp, #-{fp_offset}]')
             fp_offset += 16
         yield arg_off
 
