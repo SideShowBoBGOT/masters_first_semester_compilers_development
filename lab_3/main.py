@@ -4,6 +4,7 @@ import re
 import enum
 import typing
 import pathlib
+import contextlib
 
 class TokenLparen(typing.NamedTuple):
     line_number: int
@@ -637,6 +638,83 @@ def ir_fn_defs_build(syn_fn_defs: typing.Iterable[SyntaxFunctionDefinition]):
     )
     return fn_defs
 
+# class Aarch64Register(enum.Enum):
+#     X0 = enum.auto()
+#     X1 = enum.auto()
+#     X2 = enum.auto()
+#     X3 = enum.auto()
+#     X4 = enum.auto()
+#     X5 = enum.auto()
+#     X6 = enum.auto()
+#     X7 = enum.auto()
+#     X8 = enum.auto()
+#     X9 = enum.auto()
+#     X10 = enum.auto()
+
+@contextlib.contextmanager
+def asm_stack_frame(fn_decl: IrFnDecl):
+    with contextlib.ExitStack() as exit_stack:
+        exit_stack.callback(print, 'ret')
+        print('sub sp, sp, #16')
+        exit_stack.callback(print, 'add sp, sp, #16')
+        print('str lr, [sp]')
+        exit_stack.callback(print, 'ldr lr, [sp]')
+        print('sub sp, sp, #16')
+        exit_stack.callback(print, 'add sp, sp, #16')
+        print('str fr, [sp]')
+        exit_stack.callback(print, 'ldr fp, [sp]')
+        print('mov fp, sp')
+        exit_stack.callback(print, 'mov sp, fp')
+    
+        int_var_count = 0
+        float_var_count = 0
+        stack_var_count = 0
+        fp_offset = 0
+        arg_off: dict[IrFnArg, int] = dict()
+        for arg in fn_decl.arguments:
+            arg_off[arg] = fp_offset
+            print('sub sp, sp, #16')
+            exit_stack.callback(print, 'add sp, sp, #16')
+            match arg.type_:
+                case VarType.BOOL | VarType.INT:
+                    if int_var_count < 8:
+                        print(f'str x{int_var_count}, [fp, #-{fp_offset}]')
+                    else:
+                        print(f'ldr x9, [fp, #{32 + stack_var_count * 16}]')
+                        print(f'str x9, [fp, #-{fp_offset}]')
+                        stack_var_count += 1
+                    int_var_count += 1
+                case VarType.FLOAT:
+                    if float_var_count < 8:
+                        print(f'str d{int_var_count}, [fp, #-{fp_offset}]')
+                    else:
+                        print(f'ldr d9, [fp, #{32 + stack_var_count * 16}]')
+                        print(f'str d9, [fp, #-{fp_offset}]')
+                        stack_var_count += 1
+                    float_var_count += 1
+            fp_offset += 16
+        yield arg_off
+
+def asm_generate(ir_fn_defs: typing.Iterable[IrFnDef]):
+    fn_name_table = dict((fn, f'fn{i}') for i, fn in enumerate(itertools.chain(BULTIN_FUNCTIONS, ir_fn_defs)))
+    for fn_def in ir_fn_defs:
+
+        fn_def.decl.arguments
+        for stmt in fn_def.body:
+            if isinstance(stmt, IrStmtSet):
+                if isinstance(stmt.src, IrFnArg):
+                    print('mov')
+                elif isinstance(stmt.src, Constant):
+                    print('mov')
+                    pass
+                else:
+
+                    stmt.src
+            if isinstance(stmt, IrStmtIf):
+            if isinstance(stmt, IrStmtWhile):
+            if isinstance(stmt, IrStmtReturn):
+    pass
+
 def main():
     filepath = 'example.txt'
     lparens: list[TokenLparen] = []
@@ -649,7 +727,10 @@ def main():
 
     syn_fn_defs = tuple(syntax_parse_function_definitions(lisp_tree))
     ir_fn_defs = ir_fn_defs_build(syn_fn_defs)
-    print(ir_fn_defs)
+    with open('example.asm', 'w') as file:
+        with contextlib.redirect_stdout(file):
+            asm_generate(ir_fn_defs)
+
 
 if __name__ == '__main__':
     main()

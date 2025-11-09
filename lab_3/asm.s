@@ -2,11 +2,14 @@
     msg: .ascii "Hello, World!\n"
     .align 4
 .text
-    .global my_function
-my_function:
-    fdiv d0, d0, d1
-    cset x0, ge
-    sdiv x0, x0, x1
+    .global fn0
+    .global fn1
+fn1:
+    b 
+fn0:
+    sub sp, sp, #16
+    str x1, [sp]
+    add x0, x0, x1
     ret
     ; mov x0, #1
     ; ldr x1, =msg
