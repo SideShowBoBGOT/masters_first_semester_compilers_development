@@ -4,7 +4,6 @@
 .text
     .global my_function
 my_function:
-    fcmp
     fdiv d0, d0, d1
     cset x0, ge
     sdiv x0, x0, x1
