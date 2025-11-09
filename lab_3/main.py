@@ -4,7 +4,6 @@ import re
 import enum
 import typing
 import pathlib
-import typing
 
 class TokenLparen(typing.NamedTuple):
     line_number: int
@@ -651,8 +650,6 @@ def main():
     syn_fn_defs = tuple(syntax_parse_function_definitions(lisp_tree))
     ir_fn_defs = ir_fn_defs_build(syn_fn_defs)
     print(ir_fn_defs)
-
-
 
 if __name__ == '__main__':
     main()
