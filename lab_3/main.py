@@ -453,7 +453,7 @@ class IrFnArg(typing.NamedTuple):
     name: TokenIdentifier
     type_: VarType
 
-class IrFnDef(typing.NamedTuple):
+class IrFnDecl(typing.NamedTuple):
     name: TokenIdentifier
     return_type: VarType
     arguments: tuple[IrFnArg, ...]
@@ -462,10 +462,10 @@ class IrFnDef(typing.NamedTuple):
 IrFnCallArg = IrFnArg | Constant
 
 class IrFnCall(typing.NamedTuple):
-    fn: IrFnDef | BuiltinFunction
+    fn: IrFnDecl | BuiltinFunction
     arguments: tuple[IrFnCallArg, ...]
 
-def ir_get_variable(fn_def: IrFnDef, token: TokenIdentifier) -> IrFnArg:
+def ir_get_variable(fn_def: IrFnDecl, token: TokenIdentifier) -> IrFnArg:
     for var in fn_def.arguments:
         if var.name.value == token.value:
             return var
@@ -486,17 +486,17 @@ def ir_get_type(var: IrFnCallArg):
 
 def ir_fn_call_build(
     func_call: SyntaxFunctionCall,
-    fn_defs: typing.Iterable[IrFnDef],
-    cur_fn_def: IrFnDef
+    fn_decls: typing.Iterable[IrFnDecl],
+    cur_fn_decls: IrFnDecl
 ) -> IrFnCall:
     arguments: list[IrFnCallArg] = []
     for arg in func_call.arguments:
         if isinstance(arg, SyntaxVariable):
-            arguments.append(ir_get_variable(cur_fn_def, arg.value))
+            arguments.append(ir_get_variable(cur_fn_decls, arg.value))
         else:
             arguments.append(arg)
     fn_call_types = [ir_get_type(el) for el in arguments]
-    for fn_def in fn_defs:
+    for fn_def in fn_decls:
         if func_call.name.value != fn_def.name:
             continue
         if len(func_call.arguments) != len(fn_def.arguments):
@@ -535,50 +535,54 @@ class IrStmtReturn(typing.NamedTuple):
 
 IrStmt = IrStmtWhile | IrStmtSet | IrStmtIf | IrStmtReturn
 
-def ir_stmt_arg_build(fn_defs: typing.Iterable[IrFnDef], current_fn_def: IrFnDef, var: SyntaxVarOrConstOrFuncCall):
+def ir_stmt_arg_build(fn_defs: typing.Iterable[IrFnDecl], current_fn_decl: IrFnDecl, var: SyntaxVarOrConstOrFuncCall):
     if isinstance(var, SyntaxVariable):
-        src_var = ir_get_variable(current_fn_def, var.value)
+        src_var = ir_get_variable(current_fn_decl, var.value)
         src_type = src_var.type_
     elif isinstance(var, Constant):
         src_type = ir_get_type(var)
         src_var = var
     else:
-        src_var = ir_fn_call_build(var, fn_defs, current_fn_def)                    
+        src_var = ir_fn_call_build(var, fn_defs, current_fn_decl)                    
         src_type = src_var.fn.return_type
     return src_var, src_type
 
-def ir_statement_list(fn_defs: typing.Iterable[IrFnDef], current_fn_def: IrFnDef, statements: SyntaxList[SyntaxStatement]) -> typing.Iterator[IrStmt]:
+def ir_statement_list(fn_decls: typing.Iterable[IrFnDecl], current_fn_decl: IrFnDecl, statements: SyntaxList[SyntaxStatement]) -> typing.Iterator[IrStmt]:
     for statement in statements.syntax_list:
         if isinstance(statement, SyntaxStatementSet):
-            dest_var = ir_get_variable(current_fn_def, statement.dest)
-            var, type_ = ir_stmt_arg_build(fn_defs, current_fn_def, statement.src)
+            dest_var = ir_get_variable(current_fn_decl, statement.dest)
+            var, type_ = ir_stmt_arg_build(fn_decls, current_fn_decl, statement.src)
             if type_ != dest_var.type_:
                 panic(f'Error: Type mismatch in statement set {at_line(statement.lisp_list)}')
             yield IrStmtSet(dest_var, var)
         elif isinstance(statement, SyntaxStatementIf):
-            var, type_ = ir_stmt_arg_build(fn_defs, current_fn_def, statement.condition)
-            if type_ == VarType.BOOL:
+            var, type_ = ir_stmt_arg_build(fn_decls, current_fn_decl, statement.condition)        
+            if type_ != VarType.BOOL:
                 panic(f'Error: Condition must be bool {at_line(statement.lisp_list)}')
             yield IrStmtIf(
                 var,
-                tuple(ir_statement_list(fn_defs, current_fn_def, statement.true_branch)),
-                tuple(ir_statement_list(fn_defs, current_fn_def, statement.false_branch))
+                tuple(ir_statement_list(fn_decls, current_fn_decl, statement.true_branch)),
+                tuple(ir_statement_list(fn_decls, current_fn_decl, statement.false_branch))
             )
         elif isinstance(statement, SyntaxStatementWhile):
-            var, type_ = ir_stmt_arg_build(fn_defs, current_fn_def, statement.condition)
-            if type_ == VarType.BOOL:
+            var, type_ = ir_stmt_arg_build(fn_decls, current_fn_decl, statement.condition)
+            if type_ != VarType.BOOL:
                 panic(f'Error: Condition must be bool {at_line(statement.lisp_list)}')
             yield IrStmtWhile(
                 var,
-                tuple(ir_statement_list(fn_defs, current_fn_def, statement.statements)),
+                tuple(ir_statement_list(fn_decls, current_fn_decl, statement.statements)),
             )
         else:
-            var, type_ = ir_stmt_arg_build(fn_defs, current_fn_def, statement.value)
-            if current_fn_def.return_type != type_:
+            var, type_ = ir_stmt_arg_build(fn_decls, current_fn_decl, statement.value)
+            if current_fn_decl.return_type != type_:
                 panic(f'Function does not return value of return type {at_line(statement.lisp_list)}')
             yield IrStmtReturn(var)
 
-def check_function_definitions(syn_fn_defs: typing.Iterable[SyntaxFunctionDefinition]):
+class IrFnDef(typing.NamedTuple):
+    decl: IrFnDecl
+    body: tuple[IrStmt, ...]
+
+def ir_fn_defs_build(syn_fn_defs: typing.Iterable[SyntaxFunctionDefinition]):
     for fn_def in syn_fn_defs:
         for el in fn_def.statements.syntax_list[:-1]:
             if isinstance(el, SyntaxStatementReturn):
@@ -622,28 +626,31 @@ def check_function_definitions(syn_fn_defs: typing.Iterable[SyntaxFunctionDefini
                 continue
             panic(f'Error: Duplicate function definition with builtin "{builtin_def.name}" {at_line(fn_def.lisp_list)}')
 
-    fn_defs: list[IrFnDef] = []
-    for fn_def in syn_fn_defs:
+    def _make_fn_def(fn_def: SyntaxFunctionDefinition):
         args = tuple(IrFnArg(el.token, el.vartype) for el in fn_def.arguments.syntax_list)
         vars = tuple(IrFnArg(el.token, el.vartype) for el in fn_def.variables.syntax_list)
-        fn_defs.append(IrFnDef(fn_def.name, fn_def.return_type.vartype, args, vars))
+        return IrFnDecl(fn_def.name, fn_def.return_type.vartype, args, vars)
 
-    fn_defs = tuple(fn_defs)
-
-    ir_statement_list(syn_fn_defs, fn_def, fn_def.statements)
+    fn_decls = tuple(_make_fn_def(fn_def) for fn_def in syn_fn_defs)
+    fn_defs = tuple(
+        IrFnDef(fn_decl, tuple(ir_statement_list(fn_decls, fn_decl, syn_fn_def.statements)))
+        for fn_decl, syn_fn_def in zip(fn_decls, syn_fn_defs)
+    )
+    return fn_defs
 
 def main():
     filepath = 'example.txt'
     lparens: list[TokenLparen] = []
-    lisp_tree = LispList(TokenLparen(0, 0))
+    lisp_tree = LispList(TokenLparen(0, 0), [])
     build_lisp_tree(lisp_tree, tokenize(filepath), lparens)
 
     if len(lparens) > 0:
         panic(f'Error: Unmatched paren {at_line(lparens[-1])}')
     del lparens
 
-    fn_defs = tuple(syntax_parse_function_definitions(lisp_tree))
-    check_function_definitions(fn_defs)
+    syn_fn_defs = tuple(syntax_parse_function_definitions(lisp_tree))
+    ir_fn_defs = ir_fn_defs_build(syn_fn_defs)
+    print(ir_fn_defs)
 
 
 
