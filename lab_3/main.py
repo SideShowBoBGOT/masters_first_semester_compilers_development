@@ -102,17 +102,22 @@ IDENTIFIER_RE = re.compile("[a-zA-Z!$%&*/:<=>?^_~][a-zA-Z!$%&*/:<=>?^_~0-9]*|[+]
 INT_RE = re.compile("[+-]?[0-9]+")
 FLOAT_RE = re.compile("[+-]?[0-9]+[.][0-9]+")
 
-class VarTypePair(typing.NamedTuple):
+class IrTypeBool: pass
+class IrTypeInt: pass
+class IrTypeFloat: pass
+
+type IrType = IrTypeBool | IrTypeInt | IrTypeFloat
+
+class SynType[T: IrType](typing.NamedTuple):
     token: TokenIdentifier
-    vartype: VarType
 
 class SyntaxList[T](typing.NamedTuple):
     lisp_list: LispList
     syntax_list: list[T]
 
-def syntax_parse_arg_list(arg_list: LispList | TokenIdentifier) -> SyntaxList[VarTypePair]:
+def syntax_parse_arg_list(arg_list: LispList | TokenIdentifier) -> SyntaxList[SynType[IrType]]:
     if isinstance(arg_list, LispList):
-        syntax_list = SyntaxList[VarTypePair](arg_list, [])
+        syntax_list = SyntaxList[SynType[IrType]](arg_list, [])
         for name_type_pair in arg_list.elements:
             if isinstance(name_type_pair, LispList):
                 if len(name_type_pair.elements) != 2:
@@ -123,9 +128,15 @@ def syntax_parse_arg_list(arg_list: LispList | TokenIdentifier) -> SyntaxList[Va
                         panic(f'Error: Argument name does not match identifier pattern {at_line(arg_name)}')
                     arg_type = name_type_pair.elements[1]
                     if isinstance(arg_type, TokenIdentifier):
-                        if arg_type.value not in VarType:
-                            panic(f'Error: Argument type is not valid {at_line(arg_type)}')
-                        syntax_list.syntax_list.append(VarTypePair(arg_name, VarType(arg_type.value)))
+                        match arg_type.value:
+                            case VarType.BOOL:
+                                syntax_list.syntax_list.append(SynType[IrTypeBool](arg_name))
+                            case VarType.INT:
+                                syntax_list.syntax_list.append(SynType[IrTypeInt](arg_name))
+                            case VarType.FLOAT:
+                                syntax_list.syntax_list.append(SynType[IrTypeFloat](arg_name))
+                            case _:
+                                panic(f'Error: Argument type is not valid {at_line(arg_type)}')
                     else:
                         panic(f'Error: Argument type must be an atom {at_line(arg_type.lparen)}')
                 else:
@@ -210,19 +221,19 @@ class SyntaxStatementReturn(typing.NamedTuple):
 class SyntaxStatementIf(typing.NamedTuple):
     lisp_list: LispList
     condition: SyntaxVarOrConstOrFuncCall
-    true_branch: SyntaxList['SyntaxStatement']
-    false_branch: SyntaxList['SyntaxStatement']
+    true_branch: SyntaxList['SnStmt']
+    false_branch: SyntaxList['SnStmt']
 
 class SyntaxStatementWhile(typing.NamedTuple):
     lisp_list: LispList
     condition: SyntaxVarOrConstOrFuncCall
-    statements: SyntaxList['SyntaxStatement']
+    statements: SyntaxList['SnStmt']
 
-SyntaxStatement = SyntaxStatementSet | SyntaxStatementIf | SyntaxStatementWhile | SyntaxStatementReturn
+type SnStmt = SyntaxStatementSet | SyntaxStatementIf | SyntaxStatementWhile | SyntaxStatementReturn
 
-def syntax_parse_statement_list(lisp_statement_list: LispList | TokenIdentifier, constants_list: list[Constant]) -> SyntaxList[SyntaxStatement]:
+def syntax_parse_statement_list(lisp_statement_list: LispList | TokenIdentifier, constants_list: list[Constant]) -> SyntaxList[SnStmt]:
     if isinstance(lisp_statement_list, LispList):
-        statements = SyntaxList[SyntaxStatement](lisp_statement_list, [])
+        statements = SyntaxList[SnStmt](lisp_statement_list, [])
         for lisp_statement in lisp_statement_list.elements:
             if isinstance(lisp_statement, LispList):
                 if len(lisp_statement.elements) == 0:
@@ -279,19 +290,18 @@ def syntax_parse_statement_list(lisp_statement_list: LispList | TokenIdentifier,
     else:
         panic(f'Error: Statement list must be a list {at_line(lisp_statement_list)}')
 
-class SyntaxFunctionDefinition(typing.NamedTuple):
+class SnFnDef[R: IrType](typing.NamedTuple):
     lisp_list: LispList
     name: TokenIdentifier 
-    return_type: VarTypePair
-    arguments: SyntaxList[VarTypePair]
-    variables: SyntaxList[VarTypePair]
-    statements: SyntaxList[SyntaxStatement]
+    arguments: SyntaxList[SynType[IrType]]
+    variables: SyntaxList[SynType[IrType]]
+    statements: SyntaxList[SnStmt]
 
-def syntax_parse_function_definitions(lisp_tree: LispList, constants_list: list[Constant]) -> typing.Iterator[SyntaxFunctionDefinition]:
+def syntax_parse_function_definitions(lisp_tree: LispList, constants_list: list[Constant]) -> typing.Iterator[SnFnDef[IrType]]:
     for fn_def in lisp_tree.elements:
         if isinstance(fn_def, LispList):
             if len(fn_def.elements) != 6:
-                panic('')
+                panic(f'Error: Function def must containt 6 elements')
             if isinstance(fn_def.elements[0], TokenIdentifier):
                 if fn_def.elements[0].value != 'fn':
                     panic(f'Error: Function must start with fn {at_line(fn_def.elements[0])}')
@@ -300,13 +310,18 @@ def syntax_parse_function_definitions(lisp_tree: LispList, constants_list: list[
                         panic(f'Error: Function name does not match identifier pattern {at_line(fn_def.elements[1])}')
                     syn_fn_def_name = fn_def.elements[1]
                     if isinstance(fn_def.elements[2], TokenIdentifier):
-                        if fn_def.elements[2].value not in VarType:
-                            panic(f'Error: Function return type is not valid {at_line(fn_def.elements[2])}')
-                        syn_fn_def_return_type = VarTypePair(fn_def.elements[2], VarType(fn_def.elements[2].value))
                         syn_fn_def_arguments = syntax_parse_arg_list(fn_def.elements[3])
                         syn_fn_def_variables = syntax_parse_arg_list(fn_def.elements[4])
                         syn_fn_def_statements = syntax_parse_statement_list(fn_def.elements[5], constants_list)
-                        yield SyntaxFunctionDefinition(fn_def, syn_fn_def_name, syn_fn_def_return_type, syn_fn_def_arguments, syn_fn_def_variables, syn_fn_def_statements)
+                        match fn_def.elements[2].value:
+                            case VarType.BOOL:
+                                yield SnFnDef[IrTypeBool](fn_def, syn_fn_def_name, syn_fn_def_arguments, syn_fn_def_variables, syn_fn_def_statements)
+                            case VarType.INT:
+                                yield SnFnDef[IrTypeInt](fn_def, syn_fn_def_name, syn_fn_def_arguments, syn_fn_def_variables, syn_fn_def_statements)
+                            case VarType.FLOAT:
+                                yield SnFnDef[IrTypeFloat](fn_def, syn_fn_def_name, syn_fn_def_arguments, syn_fn_def_variables, syn_fn_def_statements)
+                            case _:
+                                panic(f'Error: Function return type is not valid {at_line(fn_def.elements[2])}')
                     else:
                         panic(f'Error: Function return type must be an atom {at_line(fn_def.elements[2].lparen)}')
                 else:
@@ -550,7 +565,7 @@ def ir_stmt_arg_build(fn_defs: typing.Iterable[IrFnDecl], current_fn_decl: IrFnD
         src_type = src_var.fn.return_type
     return src_var, src_type
 
-def ir_statement_list(fn_decls: typing.Iterable[IrFnDecl], current_fn_decl: IrFnDecl, statements: SyntaxList[SyntaxStatement]) -> typing.Iterator[IrStmt]:
+def ir_statement_list(fn_decls: typing.Iterable[IrFnDecl], current_fn_decl: IrFnDecl, statements: SyntaxList[SnStmt]) -> typing.Iterator[IrStmt]:
     for statement in statements.syntax_list:
         if isinstance(statement, SyntaxStatementSet):
             dest_var = ir_get_variable(current_fn_decl, statement.dest)
@@ -585,7 +600,7 @@ class IrFnDef(typing.NamedTuple):
     decl: IrFnDecl
     body: tuple[IrStmt, ...]
 
-def ir_fn_defs_build(syn_fn_defs: typing.Iterable[SyntaxFunctionDefinition]):
+def ir_fn_defs_build(syn_fn_defs: typing.Iterable[SnFnDef]):
     for fn_def in syn_fn_defs:
         for el in fn_def.statements.syntax_list[:-1]:
             if isinstance(el, SyntaxStatementReturn):
@@ -629,7 +644,7 @@ def ir_fn_defs_build(syn_fn_defs: typing.Iterable[SyntaxFunctionDefinition]):
                 continue
             panic(f'Error: Duplicate function definition with builtin "{builtin_def.name}" {at_line(fn_def.lisp_list)}')
 
-    def _make_fn_def(fn_def: SyntaxFunctionDefinition):
+    def _make_fn_def(fn_def: SnFnDef):
         args = tuple(IrFnArg(el.token.value, el.vartype) for el in fn_def.arguments.syntax_list)
         vars = tuple(IrFnArg(el.token.value, el.vartype) for el in fn_def.variables.syntax_list)
         return IrFnDecl(fn_def.name.value, fn_def.return_type.vartype, args, vars)
