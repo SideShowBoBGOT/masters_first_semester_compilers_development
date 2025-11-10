@@ -3,6 +3,7 @@
     ((a int) (b int) (c float))
     ((x int) (i int) (y float) (z float))
 (
+    (set c 3333.0)
     (set a (* 2 b))
     (set b 12)
     (if (== 55 104) (

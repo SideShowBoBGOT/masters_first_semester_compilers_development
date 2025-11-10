@@ -165,13 +165,16 @@ class SyntaxVariable(typing.NamedTuple):
 
 SyntaxVariableOrConstant = SyntaxVariable | Constant
 
-def syntax_parse_var_or_const(lisp_element: LispList | TokenIdentifier) -> SyntaxVariableOrConstant:
+def syntax_parse_var_or_const(lisp_element: LispList | TokenIdentifier, constants_list: list[Constant]) -> SyntaxVariableOrConstant:
     if isinstance(lisp_element, TokenIdentifier):
         if lisp_element.value in SyntaxBool:
-            return ConstantBool(lisp_element)
+            constants_list.append(ConstantBool(lisp_element))
+            return constants_list[-1]
         elif INT_RE.fullmatch(lisp_element.value):
-            return ConstantInt(lisp_element)
+            constants_list.append(ConstantInt(lisp_element))
+            return constants_list[-1]
         elif FLOAT_RE.fullmatch(lisp_element.value):
+            constants_list.append(ConstantFloat(lisp_element))
             return ConstantFloat(lisp_element)
         else:
             return SyntaxVariable(lisp_element)
@@ -185,14 +188,14 @@ class SyntaxFunctionCall(typing.NamedTuple):
 
 SyntaxVarOrConstOrFuncCall = SyntaxVariableOrConstant | SyntaxFunctionCall
 
-def syntax_parse_var_or_const_or_func_call(statement_argument: LispList | TokenIdentifier) -> SyntaxVarOrConstOrFuncCall:
+def syntax_parse_var_or_const_or_func_call(statement_argument: LispList | TokenIdentifier, constants_list: list[Constant]) -> SyntaxVarOrConstOrFuncCall:
     if isinstance(statement_argument, TokenIdentifier):
-        return syntax_parse_var_or_const(statement_argument)
+        return syntax_parse_var_or_const(statement_argument, constants_list)
     else:
         return SyntaxFunctionCall(
             statement_argument,
             check_atom_identifier(statement_argument.elements[0]),
-            tuple(syntax_parse_var_or_const(el) for el in statement_argument.elements[1:])
+            tuple(syntax_parse_var_or_const(el, constants_list) for el in statement_argument.elements[1:])
         )
 
 class SyntaxStatementSet(typing.NamedTuple):
@@ -217,7 +220,7 @@ class SyntaxStatementWhile(typing.NamedTuple):
 
 SyntaxStatement = SyntaxStatementSet | SyntaxStatementIf | SyntaxStatementWhile | SyntaxStatementReturn
 
-def syntax_parse_statement_list(lisp_statement_list: LispList | TokenIdentifier) -> SyntaxList[SyntaxStatement]:
+def syntax_parse_statement_list(lisp_statement_list: LispList | TokenIdentifier, constants_list: list[Constant]) -> SyntaxList[SyntaxStatement]:
     if isinstance(lisp_statement_list, LispList):
         statements = SyntaxList[SyntaxStatement](lisp_statement_list, [])
         for lisp_statement in lisp_statement_list.elements:
@@ -233,7 +236,7 @@ def syntax_parse_statement_list(lisp_statement_list: LispList | TokenIdentifier)
                             SyntaxStatementSet(
                                 lisp_statement,
                                 check_atom_identifier(lisp_statement.elements[1]),
-                                syntax_parse_var_or_const_or_func_call(lisp_statement.elements[2])
+                                syntax_parse_var_or_const_or_func_call(lisp_statement.elements[2], constants_list)
                             )
                         )
                     elif statement_name.value == 'if':
@@ -242,9 +245,9 @@ def syntax_parse_statement_list(lisp_statement_list: LispList | TokenIdentifier)
                         statements.syntax_list.append(
                             SyntaxStatementIf(
                                 lisp_statement,
-                                syntax_parse_var_or_const_or_func_call(lisp_statement.elements[1]),
-                                syntax_parse_statement_list(lisp_statement.elements[2]),
-                                syntax_parse_statement_list(lisp_statement.elements[3]),
+                                syntax_parse_var_or_const_or_func_call(lisp_statement.elements[1], constants_list),
+                                syntax_parse_statement_list(lisp_statement.elements[2], constants_list),
+                                syntax_parse_statement_list(lisp_statement.elements[3], constants_list),
                             )
                         )
                     elif statement_name.value == 'while':
@@ -253,8 +256,8 @@ def syntax_parse_statement_list(lisp_statement_list: LispList | TokenIdentifier)
                         statements.syntax_list.append(
                             SyntaxStatementWhile(
                                 lisp_statement,
-                                syntax_parse_var_or_const_or_func_call(lisp_statement.elements[1]),
-                                syntax_parse_statement_list(lisp_statement.elements[2]),
+                                syntax_parse_var_or_const_or_func_call(lisp_statement.elements[1], constants_list),
+                                syntax_parse_statement_list(lisp_statement.elements[2], constants_list),
                             )
                         )
                     elif statement_name.value == 'return':
@@ -263,7 +266,7 @@ def syntax_parse_statement_list(lisp_statement_list: LispList | TokenIdentifier)
                         statements.syntax_list.append(
                             SyntaxStatementReturn(
                                 lisp_statement,
-                                syntax_parse_var_or_const_or_func_call(lisp_statement.elements[1])
+                                syntax_parse_var_or_const_or_func_call(lisp_statement.elements[1], constants_list)
                             )
                         )
                     else:
@@ -284,7 +287,7 @@ class SyntaxFunctionDefinition(typing.NamedTuple):
     variables: SyntaxList[VarTypePair]
     statements: SyntaxList[SyntaxStatement]
 
-def syntax_parse_function_definitions(lisp_tree: LispList) -> typing.Iterator[SyntaxFunctionDefinition]:
+def syntax_parse_function_definitions(lisp_tree: LispList, constants_list: list[Constant]) -> typing.Iterator[SyntaxFunctionDefinition]:
     for fn_def in lisp_tree.elements:
         if isinstance(fn_def, LispList):
             if len(fn_def.elements) != 6:
@@ -302,7 +305,7 @@ def syntax_parse_function_definitions(lisp_tree: LispList) -> typing.Iterator[Sy
                         syn_fn_def_return_type = VarTypePair(fn_def.elements[2], VarType(fn_def.elements[2].value))
                         syn_fn_def_arguments = syntax_parse_arg_list(fn_def.elements[3])
                         syn_fn_def_variables = syntax_parse_arg_list(fn_def.elements[4])
-                        syn_fn_def_statements = syntax_parse_statement_list(fn_def.elements[5])
+                        syn_fn_def_statements = syntax_parse_statement_list(fn_def.elements[5], constants_list)
                         yield SyntaxFunctionDefinition(fn_def, syn_fn_def_name, syn_fn_def_return_type, syn_fn_def_arguments, syn_fn_def_variables, syn_fn_def_statements)
                     else:
                         panic(f'Error: Function return type must be an atom {at_line(fn_def.elements[2].lparen)}')
@@ -661,7 +664,7 @@ def asm_stack_frame(fn_decl: IrFnDecl):
         exit_stack.callback(print, 'ldr lr, [sp]')
         print('sub sp, sp, #16')
         exit_stack.callback(print, 'add sp, sp, #16')
-        print('str fr, [sp]')
+        print('str fp, [sp]')
         exit_stack.callback(print, 'ldr fp, [sp]')
         print('mov fp, sp')
         exit_stack.callback(print, 'mov sp, fp')
@@ -701,26 +704,58 @@ def asm_stack_frame(fn_decl: IrFnDecl):
             fp_offset += 16
         yield arg_off
 
-def asm_generate(ir_fn_defs: typing.Iterable[IrFnDef]):
+def asm_generate(ir_fn_defs: typing.Iterable[IrFnDef], constants: typing.Iterable[Constant]):
+    print('.data')
+    const_table = dict((const, f'const{i}') for i, const in enumerate(constants))
+    for const in constants:
+        if isinstance(const, ConstantBool) or isinstance(const, ConstantInt):
+            type_ = 'dword'
+            val = int(const.value.value)
+        else:
+            type_ = 'double'
+            val = float(const.value.value)
+        print('.align 8')
+        print(f'{const_table[const]}: .{type_} {val}')
+    
+    print('.text')
     fn_name_table = dict((fn, f'fn{i}') for i, fn in enumerate(itertools.chain(BULTIN_FUNCTIONS, ir_fn_defs)))
+    for fn_def in BULTIN_FUNCTIONS:
+        print(f'// {fn_def.name}')
+        print(f'.global {fn_name_table[fn_def]}')
+        print(f'{fn_name_table[fn_def]}:')
+        print(fn_def.asm_code.strip())
     for fn_def in ir_fn_defs:
+        print(f'// {fn_def.decl.name.value}')
+        print(f'.global {fn_name_table[fn_def]}')
+        print(f'{fn_name_table[fn_def]}:')
+        with asm_stack_frame(fn_def.decl) as arg_off:
+            for stmt in fn_def.body:
+                if isinstance(stmt, IrStmtSet):
+                    if isinstance(stmt.src, IrFnArg):
+                        match stmt.src.type_:
+                            case VarType.BOOL | VarType.INT:
+                                reg = 'x'
+                            case VarType.FLOAT:
+                                reg = 'd'
+                        print(f'ldr {reg}9, [fp, #-{arg_off[stmt.src]}]')
+                        print(f'str {reg}9, [fp, #-{arg_off[stmt.dest]}]')
+                    elif isinstance(stmt.src, Constant):
+                        if isinstance(stmt.src, ConstantBool):
+                            reg = 'x'
+                        elif isinstance(stmt.src, ConstantInt):
+                            reg = 'x'
+                        else:
+                            reg = 'd'
+                        print(f'ldr {reg}9, ={const_table[stmt.src]}')
+                        print(f'str {reg}9, [fp, #-{arg_off[stmt.dest]}]')
+                    else:
+                        stmt.src
+                # if isinstance(stmt, IrStmtIf):
+                # if isinstance(stmt, IrStmtWhile):
+                # if isinstance(stmt, IrStmtReturn):
 
-        fn_def.decl.arguments
-        for stmt in fn_def.body:
-            if isinstance(stmt, IrStmtSet):
-                if isinstance(stmt.src, IrFnArg):
-                    print('mov')
-                elif isinstance(stmt.src, Constant):
-                    print('mov')
-                    pass
-                else:
-
-                    stmt.src
-            if isinstance(stmt, IrStmtIf):
-            if isinstance(stmt, IrStmtWhile):
-            if isinstance(stmt, IrStmtReturn):
-    pass
-
+            pass
+        
 def main():
     filepath = 'example.txt'
     lparens: list[TokenLparen] = []
@@ -731,11 +766,12 @@ def main():
         panic(f'Error: Unmatched paren {at_line(lparens[-1])}')
     del lparens
 
-    syn_fn_defs = tuple(syntax_parse_function_definitions(lisp_tree))
+    constants_list: list[Constant] = []
+    syn_fn_defs = tuple(syntax_parse_function_definitions(lisp_tree, constants_list))
     ir_fn_defs = ir_fn_defs_build(syn_fn_defs)
-    with open('example.asm', 'w') as file:
+    with open('example.s', 'w') as file:
         with contextlib.redirect_stdout(file):
-            asm_generate(ir_fn_defs)
+            asm_generate(ir_fn_defs, constants_list)
 
 
 if __name__ == '__main__':

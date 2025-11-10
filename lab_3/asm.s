@@ -4,11 +4,7 @@
 .text
     .global fn0
     .global fn1
-fn1:
-    b 
 fn0:
-    sub sp, sp, #16
-    str x1, [sp]
     add x0, x0, x1
     ret
     ; mov x0, #1

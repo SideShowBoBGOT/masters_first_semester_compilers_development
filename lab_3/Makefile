@@ -8,12 +8,12 @@ all:
 $(BUILD_DIR):
 	mkdir -p $@
 
-.PHONY: asm
-asm: $(BUILD_DIR)/asm
-$(BUILD_DIR)/asm: asm.s | $(BUILD_DIR)
-	gcc $^ -o $@
-
 .PHONY: test
 test: $(BUILD_DIR)/test
 $(BUILD_DIR)/test: test.c asm.s | $(BUILD_DIR)
+	gcc $^ -g -O0 -o $@
+
+.PHONY: example
+example: $(BUILD_DIR)/example
+$(BUILD_DIR)/example: example.c example.s | $(BUILD_DIR)
 	gcc $^ -g -O0 -o $@
