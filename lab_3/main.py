@@ -500,7 +500,7 @@ def ir_fn_call_build(
             arguments.append(arg)
     fn_call_types = [ir_get_type(el) for el in arguments]
     for fn_def in fn_decls:
-        if func_call.name.value != fn_def.name:
+        if func_call.name.value != fn_def.name.value:
             continue
         if len(func_call.arguments) != len(fn_def.arguments):
             continue
@@ -818,6 +818,7 @@ def main():
     constants_list: list[Constant] = []
     syn_fn_defs = tuple(syntax_parse_function_definitions(lisp_tree, constants_list))
     ir_fn_defs = ir_fn_defs_build(syn_fn_defs)
+    # print(ir_fn_defs)
     with open('example.s', 'w') as file:
         with contextlib.redirect_stdout(file):
             asm_generate(ir_fn_defs, constants_list)

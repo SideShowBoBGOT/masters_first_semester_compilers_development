@@ -1,28 +1,46 @@
 .data
 .align 8
-const0: .double 3333.0
+const0: .dword 1
 .align 8
-const1: .dword 2
+const1: .dword 0
 .align 8
-const2: .dword 12
+const2: .dword 1
 .align 8
-const3: .dword 55
+const3: .dword 1
 .align 8
-const4: .dword 104
+const4: .double 1.0
 .align 8
-const5: .double 33.23122222
+const5: .double 0.0
 .align 8
-const6: .double 3444.0
+const6: .double 1.0
 .align 8
-const7: .dword 0
+const7: .double 1.0
 .align 8
-const8: .dword 5
+const8: .double 3333.0
 .align 8
-const9: .dword 1
+const9: .dword 2
 .align 8
-const10: .dword 1
+const10: .dword 12
 .align 8
-const11: .dword 2
+const11: .dword 55
+.align 8
+const12: .dword 104
+.align 8
+const13: .dword 5
+.align 8
+const14: .double 33.23122222
+.align 8
+const15: .double 3444.0
+.align 8
+const16: .dword 0
+.align 8
+const17: .dword 5
+.align 8
+const18: .dword 1
+.align 8
+const19: .dword 1
+.align 8
+const20: .dword 2
 .text
 // ==
 .global fn0
@@ -130,9 +148,79 @@ fn18:
 fcmp d0, d1
 cset x0, le
 ret
-// my_function
+// factorial
 .global fn19
 fn19:
+sub sp, sp, #16
+str lr, [sp]
+sub sp, sp, #16
+str fp, [sp]
+mov fp, sp
+sub sp, sp, #16
+str x0, [fp, #-0]
+sub sp, sp, #16
+mov x9, #0
+str x9, [fp, #-16]
+sub sp, sp, #16
+mov x9, #0
+str x9, [fp, #-32]
+sub sp, sp, #16
+mov x9, #0
+str x9, [fp, #-48]
+ldr x9, =const0
+str x9, [fp, #-16]
+ldr x9, =const1
+str x9, [fp, #-32]
+ldr x9, =const2
+str x9, [fp, #-48]
+add sp, sp, #16
+add sp, sp, #16
+add sp, sp, #16
+add sp, sp, #16
+mov sp, fp
+ldr fp, [sp]
+add sp, sp, #16
+ldr lr, [sp]
+add sp, sp, #16
+ret
+// factorial
+.global fn20
+fn20:
+sub sp, sp, #16
+str lr, [sp]
+sub sp, sp, #16
+str fp, [sp]
+mov fp, sp
+sub sp, sp, #16
+str d0, [fp, #-0]
+sub sp, sp, #16
+mov x9, #0
+str x9, [fp, #-16]
+sub sp, sp, #16
+mov x9, #0
+str x9, [fp, #-32]
+sub sp, sp, #16
+mov x9, #0
+str x9, [fp, #-48]
+ldr d9, =const4
+str d9, [fp, #-16]
+ldr d9, =const5
+str d9, [fp, #-32]
+ldr d9, =const6
+str d9, [fp, #-48]
+add sp, sp, #16
+add sp, sp, #16
+add sp, sp, #16
+add sp, sp, #16
+mov sp, fp
+ldr fp, [sp]
+add sp, sp, #16
+ldr lr, [sp]
+add sp, sp, #16
+ret
+// my_function
+.global fn21
+fn21:
 sub sp, sp, #16
 str lr, [sp]
 sub sp, sp, #16
@@ -156,13 +244,13 @@ str x9, [fp, #-80]
 sub sp, sp, #16
 mov x9, #0
 str x9, [fp, #-96]
-ldr d9, =const0
+ldr d9, =const8
 str d9, [fp, #-32]
-ldr x0, =const1
+ldr x0, =const9
 ldr x1, [fp, #-16]
-ldr x9, =const2
+ldr x9, =const10
 str x9, [fp, #-16]
-ldr x9, =const7
+ldr x9, =const16
 str x9, [fp, #-64]
 add sp, sp, #16
 add sp, sp, #16
