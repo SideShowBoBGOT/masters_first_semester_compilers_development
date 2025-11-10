@@ -1,5 +1,6 @@
 .antlr/
 venv/
+__pycache__
 # Prerequisites
 *.d
 
