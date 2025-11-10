@@ -248,6 +248,7 @@ ldr d9, =const8
 str d9, [fp, #-32]
 ldr x0, =const9
 ldr x1, [fp, #-16]
+bl fn2
 ldr x9, =const10
 str x9, [fp, #-16]
 ldr x9, =const16

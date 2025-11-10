@@ -453,11 +453,11 @@ ret
 )
 
 class IrFnArg(typing.NamedTuple):
-    name: TokenIdentifier
+    name: str
     type_: VarType
 
 class IrFnDecl(typing.NamedTuple):
-    name: TokenIdentifier
+    name: str
     return_type: VarType
     arguments: tuple[IrFnArg, ...]
     variables: tuple[IrFnArg, ...]
@@ -470,10 +470,10 @@ class IrFnCall(typing.NamedTuple):
 
 def ir_get_variable(fn_def: IrFnDecl, token: TokenIdentifier) -> IrFnArg:
     for var in fn_def.arguments:
-        if var.name.value == token.value:
+        if var.name == token.value:
             return var
     for var in fn_def.variables:
-        if var.name.value == token.value:
+        if var.name == token.value:
             return var
     panic(f'Error: token "{token.value}" is not a variable nor parameter {at_line(token)}')
 
@@ -500,7 +500,7 @@ def ir_fn_call_build(
             arguments.append(arg)
     fn_call_types = [ir_get_type(el) for el in arguments]
     for fn_def in fn_decls:
-        if func_call.name.value != fn_def.name.value:
+        if func_call.name.value != fn_def.name:
             continue
         if len(func_call.arguments) != len(fn_def.arguments):
             continue
@@ -630,9 +630,9 @@ def ir_fn_defs_build(syn_fn_defs: typing.Iterable[SyntaxFunctionDefinition]):
             panic(f'Error: Duplicate function definition with builtin "{builtin_def.name}" {at_line(fn_def.lisp_list)}')
 
     def _make_fn_def(fn_def: SyntaxFunctionDefinition):
-        args = tuple(IrFnArg(el.token, el.vartype) for el in fn_def.arguments.syntax_list)
-        vars = tuple(IrFnArg(el.token, el.vartype) for el in fn_def.variables.syntax_list)
-        return IrFnDecl(fn_def.name, fn_def.return_type.vartype, args, vars)
+        args = tuple(IrFnArg(el.token.value, el.vartype) for el in fn_def.arguments.syntax_list)
+        vars = tuple(IrFnArg(el.token.value, el.vartype) for el in fn_def.variables.syntax_list)
+        return IrFnDecl(fn_def.name.value, fn_def.return_type.vartype, args, vars)
 
     fn_decls = tuple(_make_fn_def(fn_def) for fn_def in syn_fn_defs)
     fn_defs = tuple(
@@ -717,16 +717,16 @@ def asm_generate(ir_fn_defs: typing.Iterable[IrFnDef], constants: typing.Iterabl
         print('.align 8')
         print(f'{const_table[const]}: .{type_} {val}')
     print('.text')
-    fn_name_table = dict((fn, f'fn{i}') for i, fn in enumerate(itertools.chain(BULTIN_FUNCTIONS, ir_fn_defs)))
+    fn_name_table = dict((fn, f'fn{i}') for i, fn in enumerate(itertools.chain(BULTIN_FUNCTIONS, (fn.decl for fn in ir_fn_defs))))
     for fn_def in BULTIN_FUNCTIONS:
         print(f'// {fn_def.name}')
         print(f'.global {fn_name_table[fn_def]}')
         print(f'{fn_name_table[fn_def]}:')
         print(fn_def.asm_code.strip())
     for fn_def in ir_fn_defs:
-        print(f'// {fn_def.decl.name.value}')
-        print(f'.global {fn_name_table[fn_def]}')
-        print(f'{fn_name_table[fn_def]}:')
+        print(f'// {fn_def.decl.name}')
+        print(f'.global {fn_name_table[fn_def.decl]}')
+        print(f'{fn_name_table[fn_def.decl]}:')
         with asm_stack_frame(fn_def.decl) as arg_off:
             for stmt in fn_def.body:
                 if isinstance(stmt, IrStmtSet):
@@ -778,28 +778,27 @@ def asm_generate(ir_fn_defs: typing.Iterable[IrFnDef], constants: typing.Iterabl
                                 else:
                                     stack_arguments.append(arg)
                                 float_var_count += 1
-                        # with contextlib.ExitStack() as exit_stack:
-                        #     fp_offset = 0
-                        #     stack_arguments.reverse()
-                        #     for arg in stack_arguments:
-                        #         print('sub sp, sp, #16')
-                        #         exit_stack.callback(print, 'add sp, sp, #16')
-                        #         if isinstance(arg, IrFnArg):
-                        #             match arg.type_:
-                        #                 case VarType.BOOL | VarType.INT:
-                        #                     print(f'ldr x9, [fp, #-{arg_off[arg]}]')
-                        #                     print('str x9, [sp]')
-                        #                 case VarType.FLOAT:
-                        #                     print(f'ldr d9, [fp, #-{arg_off[arg]}]')
-                        #                     print('str d9, [sp]')
-                        #             print(f'ldr')
-                        #             print(f'str ')
-                                
-                        #     stmt.src.
-                        #     pass
-                        # stmt.src
-
-                # if isinstance(stmt, IrStmtIf):
+                        with contextlib.ExitStack() as exit_stack:
+                            stack_arguments.reverse()
+                            for arg in stack_arguments:
+                                print('sub sp, sp, #16')
+                                exit_stack.callback(print, 'add sp, sp, #16')
+                                if isinstance(arg, IrFnArg):
+                                    match arg.type_:
+                                        case VarType.BOOL | VarType.INT:
+                                            print(f'ldr x9, [fp, #-{arg_off[arg]}]')
+                                            print('str x9, [sp]')
+                                        case VarType.FLOAT:
+                                            print(f'ldr d9, [fp, #-{arg_off[arg]}]')
+                                            print('str d9, [sp]')
+                                elif isinstance(arg, ConstantBool | ConstantInt):
+                                    print(f'ldr x9, ={const_table[arg]}')
+                                    print('str x9, [sp]')
+                                else:
+                                    print(f'ldr d9, ={const_table[arg]}')
+                                    print('str d9, [sp]')
+                            print(f'bl {fn_name_table[stmt.src.fn]}') 
+                # elif isinstance(stmt, IrStmtIf):
                 # if isinstance(stmt, IrStmtWhile):
                 # if isinstance(stmt, IrStmtReturn):
 
