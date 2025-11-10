@@ -158,6 +158,8 @@ mov x9, #0
 str x9, [fp, #-96]
 ldr d9, =const0
 str d9, [fp, #-32]
+ldr x0, =const1
+ldr x1, [fp, #-16]
 ldr x9, =const2
 str x9, [fp, #-16]
 ldr x9, =const7

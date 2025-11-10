@@ -716,7 +716,6 @@ def asm_generate(ir_fn_defs: typing.Iterable[IrFnDef], constants: typing.Iterabl
             val = float(const.value.value)
         print('.align 8')
         print(f'{const_table[const]}: .{type_} {val}')
-    
     print('.text')
     fn_name_table = dict((fn, f'fn{i}') for i, fn in enumerate(itertools.chain(BULTIN_FUNCTIONS, ir_fn_defs)))
     for fn_def in BULTIN_FUNCTIONS:
@@ -749,7 +748,57 @@ def asm_generate(ir_fn_defs: typing.Iterable[IrFnDef], constants: typing.Iterabl
                         print(f'ldr {reg}9, ={const_table[stmt.src]}')
                         print(f'str {reg}9, [fp, #-{arg_off[stmt.dest]}]')
                     else:
-                        stmt.src
+                        int_var_count = 0
+                        float_var_count = 0
+                        stack_arguments: list[IrFnCallArg] = []
+                        for arg in stmt.src.arguments:
+                            if isinstance(arg, IrFnArg):
+                                match arg.type_:
+                                    case VarType.BOOL | VarType.INT:
+                                        if int_var_count < 8:
+                                            print(f'ldr x{int_var_count}, [fp, #-{arg_off[arg]}]')
+                                        else:
+                                            stack_arguments.append(arg)
+                                        int_var_count += 1
+                                    case VarType.FLOAT:
+                                        if float_var_count < 8:
+                                            print(f'ldr d{float_var_count}, [fp, #-{arg_off[arg]}]')
+                                        else:
+                                            stack_arguments.append(arg)
+                                        float_var_count += 1
+                            elif isinstance(arg, ConstantBool | ConstantInt):
+                                if int_var_count < 8:
+                                    print(f'ldr x{int_var_count}, ={const_table[arg]}')
+                                else:
+                                    stack_arguments.append(arg)
+                                int_var_count += 1
+                            else:
+                                if float_var_count < 8:
+                                    print(f'ldr d{float_var_count}, ={const_table[arg]}')
+                                else:
+                                    stack_arguments.append(arg)
+                                float_var_count += 1
+                        # with contextlib.ExitStack() as exit_stack:
+                        #     fp_offset = 0
+                        #     stack_arguments.reverse()
+                        #     for arg in stack_arguments:
+                        #         print('sub sp, sp, #16')
+                        #         exit_stack.callback(print, 'add sp, sp, #16')
+                        #         if isinstance(arg, IrFnArg):
+                        #             match arg.type_:
+                        #                 case VarType.BOOL | VarType.INT:
+                        #                     print(f'ldr x9, [fp, #-{arg_off[arg]}]')
+                        #                     print('str x9, [sp]')
+                        #                 case VarType.FLOAT:
+                        #                     print(f'ldr d9, [fp, #-{arg_off[arg]}]')
+                        #                     print('str d9, [sp]')
+                        #             print(f'ldr')
+                        #             print(f'str ')
+                                
+                        #     stmt.src.
+                        #     pass
+                        # stmt.src
+
                 # if isinstance(stmt, IrStmtIf):
                 # if isinstance(stmt, IrStmtWhile):
                 # if isinstance(stmt, IrStmtReturn):
