@@ -536,7 +536,7 @@ class IrStmtWhile(typing.NamedTuple):
 class IrStmtReturn(typing.NamedTuple):
     val: IrStmtArg
 
-IrStmt = IrStmtWhile | IrStmtSet | IrStmtIf | IrStmtReturn
+type IrStmt = IrStmtWhile | IrStmtSet | IrStmtIf | IrStmtReturn
 
 def ir_stmt_arg_build(fn_defs: typing.Iterable[IrFnDecl], current_fn_decl: IrFnDecl, var: SyntaxVarOrConstOrFuncCall):
     if isinstance(var, SyntaxVariable):
@@ -704,9 +704,166 @@ def asm_stack_frame(fn_decl: IrFnDecl):
             fp_offset += 16
         yield arg_off
 
+def asm_fn_call(
+    fn_call: IrFnCall,
+    fn_name_table: typing.Mapping[IrFnDecl | BuiltinFunction, str],
+    arg_off: typing.Mapping[IrFnArg, int],
+    const_table: typing.Mapping[Constant, str]
+):
+    int_var_count = 0
+    float_var_count = 0
+    stack_arguments: list[IrFnCallArg] = []
+    for arg in fn_call.arguments:
+        if isinstance(arg, IrFnArg):
+            match arg.type_:
+                case VarType.BOOL | VarType.INT:
+                    if int_var_count < 8:
+                        print(f'ldr x{int_var_count}, [fp, #-{arg_off[arg]}]')
+                    else:
+                        stack_arguments.append(arg)
+                    int_var_count += 1
+                case VarType.FLOAT:
+                    if float_var_count < 8:
+                        print(f'ldr d{float_var_count}, [fp, #-{arg_off[arg]}]')
+                    else:
+                        stack_arguments.append(arg)
+                    float_var_count += 1
+        elif isinstance(arg, ConstantBool | ConstantInt):
+            if int_var_count < 8:
+                print(f'ldr x{int_var_count}, ={const_table[arg]}')
+            else:
+                stack_arguments.append(arg)
+            int_var_count += 1
+        else:
+            if float_var_count < 8:
+                print(f'ldr d{float_var_count}, ={const_table[arg]}')
+            else:
+                stack_arguments.append(arg)
+            float_var_count += 1
+    with contextlib.ExitStack() as exit_stack:
+        stack_arguments.reverse()
+        for arg in stack_arguments:
+            print('sub sp, sp, #16')
+            exit_stack.callback(print, 'add sp, sp, #16')
+            if isinstance(arg, IrFnArg):
+                match arg.type_:
+                    case VarType.BOOL | VarType.INT:
+                        print(f'ldr x9, [fp, #-{arg_off[arg]}]')
+                        print('str x9, [sp]')
+                    case VarType.FLOAT:
+                        print(f'ldr d9, [fp, #-{arg_off[arg]}]')
+                        print('str d9, [sp]')
+            elif isinstance(arg, ConstantBool | ConstantInt):
+                print(f'ldr x9, ={const_table[arg]}')
+                print('str x9, [sp]')
+            else:
+                print(f'ldr d9, ={const_table[arg]}')
+                print('str d9, [sp]')
+        print(f'bl {fn_name_table[fn_call.fn]}') 
+
+def ir_collect_stmt[T: IrStmt](l: list[T], cls: type[T], stmt_list: typing.Iterable[IrStmt]):
+    for stmt in stmt_list:
+        if isinstance(stmt, cls):
+            l.append(stmt)
+        if isinstance(stmt, IrStmtSet):
+            pass
+        elif isinstance(stmt, IrStmtIf):
+            ir_collect_stmt(l, cls, stmt.branch_true)
+            ir_collect_stmt(l, cls, stmt.branch_false)
+        elif isinstance(stmt, IrStmtWhile):
+            ir_collect_stmt(l, cls, stmt.body)
+        else:
+            pass
+
+def asm_statement_list(
+    statements: typing.Iterable[IrStmt],
+    fn_name_table: typing.Mapping[IrFnDecl | BuiltinFunction, str],
+    arg_off: typing.Mapping[IrFnArg, int],
+    const_table: typing.Mapping[Constant, str],
+    if_table: typing.Mapping[IrStmtIf, str],
+    while_table: typing.Mapping[IrStmtWhile, str]
+):
+    for stmt in statements:
+        if isinstance(stmt, IrStmtSet):
+            if isinstance(stmt.src, IrFnArg):
+                match stmt.src.type_:
+                    case VarType.BOOL | VarType.INT:
+                        reg = 'x'
+                    case VarType.FLOAT:
+                        reg = 'd'
+                print(f'ldr {reg}0, [fp, #-{arg_off[stmt.src]}]')
+                print(f'str {reg}0, [fp, #-{arg_off[stmt.dest]}]')
+            elif isinstance(stmt.src, Constant):
+                if isinstance(stmt.src, ConstantBool | ConstantInt):
+                    reg = 'x'
+                else:
+                    reg = 'd'
+                print(f'ldr {reg}0, ={const_table[stmt.src]}')
+                print(f'str {reg}0, [fp, #-{arg_off[stmt.dest]}]')
+            else:
+                asm_fn_call(stmt.src, fn_name_table, arg_off, const_table)
+                match stmt.src.fn.return_type:
+                    case VarType.BOOL | VarType.INT:
+                        print(f'str x0, [fp, #-{arg_off[stmt.dest]}]')
+                    case VarType.FLOAT:
+                        print(f'str d0, [fp, #-{arg_off[stmt.dest]}]')
+        elif isinstance(stmt, IrStmtIf):
+            if isinstance(stmt.cond, IrFnArg):
+                if stmt.cond.type_ != VarType.BOOL:
+                    panic('Compiler Error')
+                print(f'ldr x0, [fp, #-{arg_off[stmt.cond]}]')
+            elif isinstance(stmt.cond, ConstantBool):
+                print(f'ldr x0, [fp, ={const_table[stmt.cond]}]')
+            elif isinstance(stmt.cond, IrFnCall):
+                if stmt.cond.fn.return_type != VarType.BOOL:
+                    panic('Compiler Error')
+                asm_fn_call(stmt.cond, fn_name_table, arg_off, const_table)
+            else:
+                panic('Compiler Error')
+            print('cmp x0, #1')
+            print(f'bne {if_table[stmt]}_false')
+            print(f'{if_table[stmt]}_true:')
+            asm_statement_list(stmt.branch_true, fn_name_table, arg_off, const_table, if_table, while_table)
+            print(f'b {if_table[stmt]}_end')
+            print(f'{if_table[stmt]}_false:')
+            asm_statement_list(stmt.branch_false, fn_name_table, arg_off, const_table, if_table, while_table)
+            print(f'b {if_table[stmt]}_end')
+            print(f'{if_table[stmt]}_end')
+        elif isinstance(stmt, IrStmtWhile):                
+            print(f'{while_table[stmt]}_start:')
+            if isinstance(stmt.cond, IrFnArg):
+                if stmt.cond.type_ != VarType.BOOL:
+                    panic('Compiler Error')
+                print(f'ldr x0, [fp, #-{arg_off[stmt.cond]}]')
+            elif isinstance(stmt.cond, ConstantBool):
+                print(f'ldr x0, [fp, ={const_table[stmt.cond]}]')
+            elif isinstance(stmt.cond, IrFnCall):
+                if stmt.cond.fn.return_type != VarType.BOOL:
+                    panic('Compiler Error')
+                asm_fn_call(stmt.cond, fn_name_table, arg_off, const_table)
+            else:
+                panic('Compiler Error')
+            print('cmp x0, #1')
+            print(f'bne {while_table[stmt]}_end')
+            asm_statement_list(stmt.body, fn_name_table, arg_off, const_table, if_table, while_table)
+            print(f'b {while_table[stmt]}_start')
+            print(f'{while_table[stmt]}_end:')
+        else:
+            pass
+
+
 def asm_generate(ir_fn_defs: typing.Iterable[IrFnDef], constants: typing.Iterable[Constant]):
+    fn_name_table = dict((fn, f'fn_{i}') for i, fn in enumerate(itertools.chain(BULTIN_FUNCTIONS, (fn.decl for fn in ir_fn_defs))))
+    const_table = dict((const, f'const_{i}') for i, const in enumerate(constants))
+    stmt_if_list: list[IrStmtIf] = []
+    stmt_while_list: list[IrStmtWhile] = []
+    for fn_def in ir_fn_defs:
+        ir_collect_stmt(stmt_if_list, IrStmtIf, fn_def.body)
+        ir_collect_stmt(stmt_while_list, IrStmtWhile, fn_def.body)
+    if_table = dict((stmt_if, f'if_{i}') for i, stmt_if in enumerate(stmt_if_list))
+    while_table = dict((stmt_while, f'while_{i}') for i, stmt_while in enumerate(stmt_while_list))
+
     print('.data')
-    const_table = dict((const, f'const{i}') for i, const in enumerate(constants))
     for const in constants:
         if isinstance(const, ConstantBool) or isinstance(const, ConstantInt):
             type_ = 'dword'
@@ -717,7 +874,6 @@ def asm_generate(ir_fn_defs: typing.Iterable[IrFnDef], constants: typing.Iterabl
         print('.align 8')
         print(f'{const_table[const]}: .{type_} {val}')
     print('.text')
-    fn_name_table = dict((fn, f'fn{i}') for i, fn in enumerate(itertools.chain(BULTIN_FUNCTIONS, (fn.decl for fn in ir_fn_defs))))
     for fn_def in BULTIN_FUNCTIONS:
         print(f'// {fn_def.name}')
         print(f'.global {fn_name_table[fn_def]}')
@@ -728,81 +884,7 @@ def asm_generate(ir_fn_defs: typing.Iterable[IrFnDef], constants: typing.Iterabl
         print(f'.global {fn_name_table[fn_def.decl]}')
         print(f'{fn_name_table[fn_def.decl]}:')
         with asm_stack_frame(fn_def.decl) as arg_off:
-            for stmt in fn_def.body:
-                if isinstance(stmt, IrStmtSet):
-                    if isinstance(stmt.src, IrFnArg):
-                        match stmt.src.type_:
-                            case VarType.BOOL | VarType.INT:
-                                reg = 'x'
-                            case VarType.FLOAT:
-                                reg = 'd'
-                        print(f'ldr {reg}9, [fp, #-{arg_off[stmt.src]}]')
-                        print(f'str {reg}9, [fp, #-{arg_off[stmt.dest]}]')
-                    elif isinstance(stmt.src, Constant):
-                        if isinstance(stmt.src, ConstantBool):
-                            reg = 'x'
-                        elif isinstance(stmt.src, ConstantInt):
-                            reg = 'x'
-                        else:
-                            reg = 'd'
-                        print(f'ldr {reg}9, ={const_table[stmt.src]}')
-                        print(f'str {reg}9, [fp, #-{arg_off[stmt.dest]}]')
-                    else:
-                        int_var_count = 0
-                        float_var_count = 0
-                        stack_arguments: list[IrFnCallArg] = []
-                        for arg in stmt.src.arguments:
-                            if isinstance(arg, IrFnArg):
-                                match arg.type_:
-                                    case VarType.BOOL | VarType.INT:
-                                        if int_var_count < 8:
-                                            print(f'ldr x{int_var_count}, [fp, #-{arg_off[arg]}]')
-                                        else:
-                                            stack_arguments.append(arg)
-                                        int_var_count += 1
-                                    case VarType.FLOAT:
-                                        if float_var_count < 8:
-                                            print(f'ldr d{float_var_count}, [fp, #-{arg_off[arg]}]')
-                                        else:
-                                            stack_arguments.append(arg)
-                                        float_var_count += 1
-                            elif isinstance(arg, ConstantBool | ConstantInt):
-                                if int_var_count < 8:
-                                    print(f'ldr x{int_var_count}, ={const_table[arg]}')
-                                else:
-                                    stack_arguments.append(arg)
-                                int_var_count += 1
-                            else:
-                                if float_var_count < 8:
-                                    print(f'ldr d{float_var_count}, ={const_table[arg]}')
-                                else:
-                                    stack_arguments.append(arg)
-                                float_var_count += 1
-                        with contextlib.ExitStack() as exit_stack:
-                            stack_arguments.reverse()
-                            for arg in stack_arguments:
-                                print('sub sp, sp, #16')
-                                exit_stack.callback(print, 'add sp, sp, #16')
-                                if isinstance(arg, IrFnArg):
-                                    match arg.type_:
-                                        case VarType.BOOL | VarType.INT:
-                                            print(f'ldr x9, [fp, #-{arg_off[arg]}]')
-                                            print('str x9, [sp]')
-                                        case VarType.FLOAT:
-                                            print(f'ldr d9, [fp, #-{arg_off[arg]}]')
-                                            print('str d9, [sp]')
-                                elif isinstance(arg, ConstantBool | ConstantInt):
-                                    print(f'ldr x9, ={const_table[arg]}')
-                                    print('str x9, [sp]')
-                                else:
-                                    print(f'ldr d9, ={const_table[arg]}')
-                                    print('str d9, [sp]')
-                            print(f'bl {fn_name_table[stmt.src.fn]}') 
-                # elif isinstance(stmt, IrStmtIf):
-                # if isinstance(stmt, IrStmtWhile):
-                # if isinstance(stmt, IrStmtReturn):
-
-            pass
+            asm_statement_list(fn_def.body, fn_name_table, arg_off, const_table, if_table, while_table)
         
 def main():
     filepath = 'example.txt'
