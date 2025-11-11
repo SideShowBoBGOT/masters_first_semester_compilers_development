@@ -13,6 +13,10 @@ const_4: .dword 0
 const_5: .dword 0
 .align 8
 const_6: .dword 1
+.align 8
+const_7: .dword 1
+.align 8
+const_8: .dword 1
 .text
 // ==
 .global fn_0
@@ -178,7 +182,7 @@ if_1_true:
 b if_1_end
 if_1_false:
 ldr x0, [fp, #-48]
-bl fn_20
+bl fn_21
 str x0, [fp, #-48]
 b if_1_end
 if_1_end:
@@ -197,7 +201,7 @@ add sp, sp, #16
 ldr lr, [sp]
 add sp, sp, #16
 ret
-// increment
+// **
 .global fn_20
 fn_20:
 sub sp, sp, #16
@@ -207,8 +211,57 @@ str fp, [sp]
 mov fp, sp
 sub sp, sp, #16
 str x0, [fp, #-16]
+sub sp, sp, #16
+str x1, [fp, #-32]
+sub sp, sp, #16
+mov x9, #0
+str x9, [fp, #-48]
+sub sp, sp, #16
+mov x9, #0
+str x9, [fp, #-64]
+ldr x0, =const_6
+ldr x0, [x0]
+str x0, [fp, #-64]
+while_1_start:
+ldr x0, [fp, #-48]
+ldr x1, [fp, #-32]
+bl fn_7
+cmp x0, #1
+bne while_1_end
+ldr x0, [fp, #-64]
+ldr x1, [fp, #-16]
+bl fn_2
+str x0, [fp, #-64]
+ldr x0, [fp, #-48]
+ldr x1, =const_7
+ldr x1, [x1]
+bl fn_4
+str x0, [fp, #-48]
+b while_1_start
+while_1_end:
+ldr x0, [fp, #-64]
+add sp, sp, #16
+add sp, sp, #16
+add sp, sp, #16
+add sp, sp, #16
+mov sp, fp
+ldr fp, [sp]
+add sp, sp, #16
+ldr lr, [sp]
+add sp, sp, #16
+ret
+// increment
+.global fn_21
+fn_21:
+sub sp, sp, #16
+str lr, [sp]
+sub sp, sp, #16
+str fp, [sp]
+mov fp, sp
+sub sp, sp, #16
+str x0, [fp, #-16]
 ldr x0, [fp, #-16]
-ldr x1, =const_6
+ldr x1, =const_8
 ldr x1, [x1]
 bl fn_4
 add sp, sp, #16
