@@ -5,37 +5,18 @@
     (while (< i num) (
         (set prod (* prod acc))
         (set acc (+ acc 1))
+        (if false (
+            
+        ) (
+            (if false (
+            ) (
+                (set i (increment i))
+            ))
+        ))
     ))
     (return prod)
-))
-(fn factorial float ((num float)) ((prod float) (i float) (acc float)) (
-    (set prod 1.0)
-    (set i 0.0)
-    (set acc 1.0)
-    (while (< i num) (
-        (set prod (* prod acc))
-        (set acc (+ acc 1.0))
-    ))
-    (return prod)
-))
-(fn my_function int
-    ((a int) (b int) (c float))
-    ((x int) (i int) (y float) (z float))
-(
-    (set c 3333.0)
-    (set a (* 2 b))
-    (set b 12)
-    (if (== 55 104) (
-        (set x (factorial 5))
-        (set y 33.23122222)
-        (set a b)
-    ) (
-        (set z 3444.0)
-    ))
-    (set i 0)
-    (while (< i 5) (
-        (set i (+ i 1))
-    ))
-    (return (* 1 2))
 ))
 
+(fn increment int ((val int)) () (
+    (return (+ val 1))
+))
