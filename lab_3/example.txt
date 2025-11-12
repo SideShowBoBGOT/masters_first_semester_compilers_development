@@ -19,6 +19,21 @@
     (return res)
 ))
 
+(fn ** float ((a float) (b int)) ((i int) (res float)) (
+    (set res 1.0)
+    (while (< i b) (
+        (set res (* res a))
+        (set i (+ i 1))
+    ))
+    (return res)
+))
+
+(fn sum_of_squares float ((var1 float) (var2 float)) ((square1 float) (square2 float)) (
+    (set square1 (** var1 2))
+    (set square2 (** var2 2))
+    (return (+ square1 square2))
+))
+
 (fn increment int ((val int)) () (
     (return (+ val 1))
 ))

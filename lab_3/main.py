@@ -641,6 +641,27 @@ def ir_fn_defs_build(syn_fn_defs: typing.Iterable[SyntaxFunctionDefinition]):
     )
     return fn_defs
 
+class AsmRegType(enum.StrEnum):
+    X = 'x'
+    D = 'd'
+
+class AsmRegArg(typing.NamedTuple):
+    arg: IrFnCallArg
+    reg_type: AsmRegType
+    reg_index: int
+
+def asm_reg_type(arg: IrFnCallArg) -> AsmRegType:
+    if isinstance(arg, IrFnArg):
+        match arg.type_:
+            case VarType.BOOL | VarType.INT:
+                return AsmRegType.X
+            case VarType.FLOAT:
+                return AsmRegType.D
+    elif isinstance(arg, ConstantBool | ConstantInt):
+        return AsmRegType.X
+    else:
+        return AsmRegType.D
+
 @contextlib.contextmanager
 def asm_stack_frame(fn_decl: IrFnDecl) -> typing.Iterator[typing.Mapping[IrFnArg, int]]:
     with contextlib.ExitStack() as exit_stack:
@@ -687,7 +708,7 @@ def asm_stack_frame(fn_decl: IrFnDecl) -> typing.Iterator[typing.Mapping[IrFnArg
                     int_var_count += 1
                 case VarType.FLOAT:
                     if float_var_count < 8:
-                        print(f'str d{int_var_count}, [fp, #-{fp_offset}]')
+                        print(f'str d{float_var_count}, [fp, #-{fp_offset}]')
                     else:
                         print(f'ldr d9, [fp, #{16 + stack_var_count * 8}]')
                         print(f'str d9, [fp, #-{fp_offset}]')
@@ -697,31 +718,16 @@ def asm_stack_frame(fn_decl: IrFnDecl) -> typing.Iterator[typing.Mapping[IrFnArg
         for arg in fn_decl.variables:
             _add_new_arg(arg)
             print(f'// {fn_decl.name} variable {arg.name}')
-            print('mov x9, #0')
-            print(f'str x9, [fp, #-{fp_offset}]')
+            reg = asm_reg_type(arg)
+            match reg:
+                case AsmRegType.X:
+                    print('mov x9, #0')
+                    print(f'str x9, [fp, #-{fp_offset}]')
+                case AsmRegType.D:
+                    print('movi d9, #0')
+                    print(f'str d9, [fp, #-{fp_offset}]')
 
         yield arg_off
-
-class AsmRegType(enum.StrEnum):
-    X = 'x'
-    D = 'd'
-
-class AsmRegArg(typing.NamedTuple):
-    arg: IrFnCallArg
-    reg_type: AsmRegType
-    reg_index: int
-
-def asm_reg_type(arg: IrFnCallArg) -> AsmRegType:
-    if isinstance(arg, IrFnArg):
-        match arg.type_:
-            case VarType.BOOL | VarType.INT:
-                return AsmRegType.X
-            case VarType.FLOAT:
-                return AsmRegType.D
-    elif isinstance(arg, ConstantBool | ConstantInt):
-        return AsmRegType.X
-    else:
-        return AsmRegType.D
 
 def asm_fn_call(
     fn_call: IrFnCall,

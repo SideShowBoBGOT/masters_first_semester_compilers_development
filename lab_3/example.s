@@ -12,7 +12,15 @@ const_4: .dword 1
 .align 8
 const_5: .dword 1
 .align 8
-const_6: .dword 1
+const_6: .double 1.0
+.align 8
+const_7: .dword 1
+.align 8
+const_8: .dword 2
+.align 8
+const_9: .dword 2
+.align 8
+const_10: .dword 1
 .text
 // ==
 .global fn_0
@@ -219,7 +227,7 @@ sub sp, sp, 0
 // fn call "increment" arg "i"
 ldr x0, [fp, #-144]
 // fn call "increment"
-bl fn_21
+bl fn_23
 add sp, sp, 0
 str x0, [fp, #-144]
 b while_0_start
@@ -286,9 +294,115 @@ ldr fp, [sp, #32]
 ldr lr, [sp, #40]
 add sp, sp, 48
 ret
-// increment
+// **
 .global fn_21
 fn_21:
+sub sp, sp, 48
+str lr, [sp, #40]
+str fp, [sp, #32]
+add fp, sp, #32
+// ** argument a
+str d0, [fp, #-8]
+// ** argument b
+str x0, [fp, #-16]
+// ** variable i
+mov x9, #0
+str x9, [fp, #-24]
+// ** variable res
+movi d9, #0
+str d9, [fp, #-32]
+ldr x0, =const_6
+ldr d0, [x0]
+str d0, [fp, #-32]
+while_2_start:
+sub sp, sp, 0
+// fn call "<" arg "i"
+ldr x0, [fp, #-24]
+// fn call "<" arg "b"
+ldr x1, [fp, #-16]
+// fn call "<"
+bl fn_7
+add sp, sp, 0
+cmp x0, #1
+bne while_2_end
+sub sp, sp, 0
+// fn call "*" arg "res"
+ldr d0, [fp, #-32]
+// fn call "*" arg "a"
+ldr d1, [fp, #-8]
+// fn call "*"
+bl fn_10
+add sp, sp, 0
+str d0, [fp, #-32]
+sub sp, sp, 0
+// fn call "+" arg "i"
+ldr x0, [fp, #-24]
+// fn call "+" arg "1"
+ldr x1, =const_7
+ldr x1, [x1]
+// fn call "+"
+bl fn_4
+add sp, sp, 0
+str x0, [fp, #-24]
+b while_2_start
+while_2_end:
+ldr d0, [fp, #-32]
+ldr fp, [sp, #32]
+ldr lr, [sp, #40]
+add sp, sp, 48
+ret
+// sum_of_squares
+.global fn_22
+fn_22:
+sub sp, sp, 48
+str lr, [sp, #40]
+str fp, [sp, #32]
+add fp, sp, #32
+// sum_of_squares argument var1
+str d0, [fp, #-8]
+// sum_of_squares argument var2
+str d1, [fp, #-16]
+// sum_of_squares variable square1
+movi d9, #0
+str d9, [fp, #-24]
+// sum_of_squares variable square2
+movi d9, #0
+str d9, [fp, #-32]
+sub sp, sp, 0
+// fn call "**" arg "var1"
+ldr d0, [fp, #-8]
+// fn call "**" arg "2"
+ldr x0, =const_8
+ldr x0, [x0]
+// fn call "**"
+bl fn_21
+add sp, sp, 0
+str d0, [fp, #-24]
+sub sp, sp, 0
+// fn call "**" arg "var2"
+ldr d0, [fp, #-16]
+// fn call "**" arg "2"
+ldr x0, =const_9
+ldr x0, [x0]
+// fn call "**"
+bl fn_21
+add sp, sp, 0
+str d0, [fp, #-32]
+sub sp, sp, 0
+// fn call "+" arg "square1"
+ldr d0, [fp, #-24]
+// fn call "+" arg "square2"
+ldr d1, [fp, #-32]
+// fn call "+"
+bl fn_12
+add sp, sp, 0
+ldr fp, [sp, #32]
+ldr lr, [sp, #40]
+add sp, sp, 48
+ret
+// increment
+.global fn_23
+fn_23:
 sub sp, sp, 32
 str lr, [sp, #24]
 str fp, [sp, #16]
@@ -299,7 +413,7 @@ sub sp, sp, 0
 // fn call "+" arg "val"
 ldr x0, [fp, #-8]
 // fn call "+" arg "1"
-ldr x1, =const_6
+ldr x1, =const_10
 ldr x1, [x1]
 // fn call "+"
 bl fn_4
