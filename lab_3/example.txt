@@ -28,9 +28,9 @@
     (return res)
 ))
 
-(fn sum_of_squares float ((var1 float) (var2 float)) ((square1 float) (square2 float)) (
-    (set square1 (** var1 2))
-    (set square2 (** var2 2))
+(fn sum_of_squares float ((var1 int) (var2 int) (var3 int) (var4 int) (var5 int) (var6 int) (var7 int) (var8 int) (var9 int) (num int) (var10 int)(var11 int)(var12 int)(var13 int)(var14 float) (var15 float)(var16 float)(var17 float)(var18 float)(var19 float)(var20 float)(var21 float)(var22 float)(var23 float)(var24 float)(var25 float)(var26 float)(var27 float)) ((square1 float) (square2 float)) (
+    (set square1 (** var25 2))
+    (set square2 (** var26 2))
     (return (+ square1 square2))
 ))
 

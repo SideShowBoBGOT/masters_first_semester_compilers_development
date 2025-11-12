@@ -354,51 +354,115 @@ ret
 // sum_of_squares
 .global fn_22
 fn_22:
-sub sp, sp, 48
-str lr, [sp, #40]
-str fp, [sp, #32]
-add fp, sp, #32
+sub sp, sp, 256
+str lr, [sp, #248]
+str fp, [sp, #240]
+add fp, sp, #240
 // sum_of_squares argument var1
-str d0, [fp, #-8]
+str x0, [fp, #-8]
 // sum_of_squares argument var2
-str d1, [fp, #-16]
+str x1, [fp, #-16]
+// sum_of_squares argument var3
+str x2, [fp, #-24]
+// sum_of_squares argument var4
+str x3, [fp, #-32]
+// sum_of_squares argument var5
+str x4, [fp, #-40]
+// sum_of_squares argument var6
+str x5, [fp, #-48]
+// sum_of_squares argument var7
+str x6, [fp, #-56]
+// sum_of_squares argument var8
+str x7, [fp, #-64]
+// sum_of_squares argument var9
+ldr x9, [fp, #16]
+str x9, [fp, #-72]
+// sum_of_squares argument num
+ldr x9, [fp, #24]
+str x9, [fp, #-80]
+// sum_of_squares argument var10
+ldr x9, [fp, #32]
+str x9, [fp, #-88]
+// sum_of_squares argument var11
+ldr x9, [fp, #40]
+str x9, [fp, #-96]
+// sum_of_squares argument var12
+ldr x9, [fp, #48]
+str x9, [fp, #-104]
+// sum_of_squares argument var13
+ldr x9, [fp, #56]
+str x9, [fp, #-112]
+// sum_of_squares argument var14
+str d0, [fp, #-120]
+// sum_of_squares argument var15
+str d1, [fp, #-128]
+// sum_of_squares argument var16
+str d2, [fp, #-136]
+// sum_of_squares argument var17
+str d3, [fp, #-144]
+// sum_of_squares argument var18
+str d4, [fp, #-152]
+// sum_of_squares argument var19
+str d5, [fp, #-160]
+// sum_of_squares argument var20
+str d6, [fp, #-168]
+// sum_of_squares argument var21
+str d7, [fp, #-176]
+// sum_of_squares argument var22
+ldr d9, [fp, #64]
+str d9, [fp, #-184]
+// sum_of_squares argument var23
+ldr d9, [fp, #72]
+str d9, [fp, #-192]
+// sum_of_squares argument var24
+ldr d9, [fp, #80]
+str d9, [fp, #-200]
+// sum_of_squares argument var25
+ldr d9, [fp, #88]
+str d9, [fp, #-208]
+// sum_of_squares argument var26
+ldr d9, [fp, #96]
+str d9, [fp, #-216]
+// sum_of_squares argument var27
+ldr d9, [fp, #104]
+str d9, [fp, #-224]
 // sum_of_squares variable square1
 movi d9, #0
-str d9, [fp, #-24]
+str d9, [fp, #-232]
 // sum_of_squares variable square2
 movi d9, #0
-str d9, [fp, #-32]
+str d9, [fp, #-240]
 sub sp, sp, 0
-// fn call "**" arg "var1"
-ldr d0, [fp, #-8]
+// fn call "**" arg "var25"
+ldr d0, [fp, #-208]
 // fn call "**" arg "2"
 ldr x0, =const_8
 ldr x0, [x0]
 // fn call "**"
 bl fn_21
 add sp, sp, 0
-str d0, [fp, #-24]
+str d0, [fp, #-232]
 sub sp, sp, 0
-// fn call "**" arg "var2"
-ldr d0, [fp, #-16]
+// fn call "**" arg "var26"
+ldr d0, [fp, #-216]
 // fn call "**" arg "2"
 ldr x0, =const_9
 ldr x0, [x0]
 // fn call "**"
 bl fn_21
 add sp, sp, 0
-str d0, [fp, #-32]
+str d0, [fp, #-240]
 sub sp, sp, 0
 // fn call "+" arg "square1"
-ldr d0, [fp, #-24]
+ldr d0, [fp, #-232]
 // fn call "+" arg "square2"
-ldr d1, [fp, #-32]
+ldr d1, [fp, #-240]
 // fn call "+"
 bl fn_12
 add sp, sp, 0
-ldr fp, [sp, #32]
-ldr lr, [sp, #40]
-add sp, sp, 48
+ldr fp, [sp, #240]
+ldr lr, [sp, #248]
+add sp, sp, 256
 ret
 // increment
 .global fn_23
