@@ -1,4 +1,4 @@
-(fn factorial int ((var1 int) (var2 int) (var3 int) (var4 int) (var5 int) (var6 int) (var7 int) (var8 int) (var9 int) (num int) (var10 int)) ((prod int) (i int) (acc int)) (
+(fn factorial int ((var1 int) (var2 int) (var3 int) (var4 int) (var5 int) (var6 int) (var7 int) (var8 int) (var9 int) (num int) (var10 int)(var11 int)(var12 int)(var13 int)(var14 int)(var15 int)) ((prod int) (i int) (acc int)) (
     (set prod 1)
     (set i 0)
     (set acc 1)

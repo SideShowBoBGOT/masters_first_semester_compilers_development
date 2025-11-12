@@ -650,7 +650,7 @@ def asm_stack_frame(fn_decl: IrFnDecl) -> typing.Iterator[typing.Mapping[IrFnArg
         if arg_var_len % 2 == 1:
             arg_var_len += 1
 
-        sp_offset = arg_var_len * 8
+        sp_offset = 16 + arg_var_len * 8
         print(f'sub sp, sp, {sp_offset}')
         exit_stack.callback(print, f'add sp, sp, {sp_offset}')
         for reg, off in (('lr', sp_offset - 8), ('fp', sp_offset - 16)):
@@ -675,6 +675,7 @@ def asm_stack_frame(fn_decl: IrFnDecl) -> typing.Iterator[typing.Mapping[IrFnArg
 
         for arg in fn_decl.arguments:
             _add_new_arg(arg)
+            print(f'// {fn_decl.name} argument {arg.name}')
             match arg.type_:
                 case VarType.BOOL | VarType.INT:
                     if int_var_count < 8:
@@ -695,6 +696,7 @@ def asm_stack_frame(fn_decl: IrFnDecl) -> typing.Iterator[typing.Mapping[IrFnArg
 
         for arg in fn_decl.variables:
             _add_new_arg(arg)
+            print(f'// {fn_decl.name} variable {arg.name}')
             print('mov x9, #0')
             print(f'str x9, [fp, #-{fp_offset}]')
 
@@ -749,33 +751,37 @@ def asm_fn_call(
                 float_var_count += 1
 
     sp_offset = len(stack_args) * 8 
-    if len(stack_args) % 2 != 0:
+    if len(stack_args) % 2 == 1:
         sp_offset += 8
     
     with contextlib.ExitStack() as exit_stack:
         print(f'sub sp, sp, {sp_offset}')
         exit_stack.callback(print, f'add sp, sp, {sp_offset}')
 
-        if len(stack_args) % 2 != 0:
-            print('stur wzr, [fp, #-8]')
-            print('stur wzr, [fp, #-4]')
+        if len(stack_args) % 2 == 1:
+            print('stur wzr, [sp, #-8]')
+            print('stur wzr, [sp, #-4]')
         
         for i, arg in enumerate(stack_args):
-            reg = asm_reg_type(arg)
             if isinstance(arg, IrFnArg):
-                print(f'ldr {reg}9, [fp, #-{arg_off[arg]}]')
+                print(f'// fn call "{fn_call.fn.name}" arg "{arg.name}"')
+                print(f'ldr x9, [fp, #-{arg_off[arg]}]')
             else:
-                print(f'ldr {reg}9, ={const_table[arg]}')
-                print(f'ldr {reg}9, [{reg}9]')
-            print(f'str {reg}9, [sp, #{i * 8}]')
+                print(f'// fn call "{fn_call.fn.name}" arg "{arg.value.value}"')
+                print(f'ldr x9, ={const_table[arg]}')
+                print(f'ldr x9, [x9]')
+            print(f'str x9, [sp, #{i * 8}]')
 
         for arg in reg_args:
             if isinstance(arg.arg, IrFnArg):
+                print(f'// fn call "{fn_call.fn.name}" arg "{arg.arg.name}"')
                 print(f'ldr {arg.reg_type}{arg.reg_index}, [fp, #-{arg_off[arg.arg]}]')
             else:
+                print(f'// fn call "{fn_call.fn.name}" arg "{arg.arg.value.value}"')
                 print(f'ldr {arg.reg_type}{arg.reg_index}, ={const_table[arg.arg]}')
                 print(f'ldr {arg.reg_type}{arg.reg_index}, [{arg.reg_type}{arg.reg_index}]')
 
+        print(f'// fn call "{fn_call.fn.name}"')
         print(f'bl {fn_name_table[fn_call.fn]}') 
 
 def ir_collect_stmt[T: IrStmt](l: list[T], cls: type[T], stmt_list: typing.Iterable[IrStmt]):

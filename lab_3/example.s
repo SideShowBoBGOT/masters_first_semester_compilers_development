@@ -127,60 +127,98 @@ ret
 // factorial
 .global fn_19
 fn_19:
-sub sp, sp, 112
-str lr, [sp, #104]
-str fp, [sp, #96]
-add fp, sp, #96
+sub sp, sp, 176
+str lr, [sp, #168]
+str fp, [sp, #160]
+add fp, sp, #160
+// factorial argument var1
 str x0, [fp, #-8]
+// factorial argument var2
 str x1, [fp, #-16]
+// factorial argument var3
 str x2, [fp, #-24]
+// factorial argument var4
 str x3, [fp, #-32]
+// factorial argument var5
 str x4, [fp, #-40]
+// factorial argument var6
 str x5, [fp, #-48]
+// factorial argument var7
 str x6, [fp, #-56]
+// factorial argument var8
 str x7, [fp, #-64]
+// factorial argument var9
 ldr x9, [fp, #16]
 str x9, [fp, #-72]
+// factorial argument num
 ldr x9, [fp, #24]
 str x9, [fp, #-80]
+// factorial argument var10
 ldr x9, [fp, #32]
 str x9, [fp, #-88]
-mov x9, #0
+// factorial argument var11
+ldr x9, [fp, #40]
 str x9, [fp, #-96]
-mov x9, #0
+// factorial argument var12
+ldr x9, [fp, #48]
 str x9, [fp, #-104]
-mov x9, #0
+// factorial argument var13
+ldr x9, [fp, #56]
 str x9, [fp, #-112]
+// factorial argument var14
+ldr x9, [fp, #64]
+str x9, [fp, #-120]
+// factorial argument var15
+ldr x9, [fp, #72]
+str x9, [fp, #-128]
+// factorial variable prod
+mov x9, #0
+str x9, [fp, #-136]
+// factorial variable i
+mov x9, #0
+str x9, [fp, #-144]
+// factorial variable acc
+mov x9, #0
+str x9, [fp, #-152]
 ldr x0, =const_0
 ldr x0, [x0]
-str x0, [fp, #-96]
+str x0, [fp, #-136]
 ldr x0, =const_1
 ldr x0, [x0]
-str x0, [fp, #-104]
+str x0, [fp, #-144]
 ldr x0, =const_2
 ldr x0, [x0]
-str x0, [fp, #-112]
+str x0, [fp, #-152]
 while_0_start:
 sub sp, sp, 0
-ldr x0, [fp, #-104]
+// fn call "<" arg "i"
+ldr x0, [fp, #-144]
+// fn call "<" arg "num"
 ldr x1, [fp, #-80]
+// fn call "<"
 bl fn_7
 add sp, sp, 0
 cmp x0, #1
 bne while_0_end
 sub sp, sp, 0
-ldr x0, [fp, #-96]
-ldr x1, [fp, #-112]
+// fn call "*" arg "prod"
+ldr x0, [fp, #-136]
+// fn call "*" arg "acc"
+ldr x1, [fp, #-152]
+// fn call "*"
 bl fn_2
 add sp, sp, 0
-str x0, [fp, #-96]
+str x0, [fp, #-136]
 sub sp, sp, 0
-ldr x0, [fp, #-112]
+// fn call "+" arg "acc"
+ldr x0, [fp, #-152]
+// fn call "+" arg "1"
 ldr x1, =const_3
 ldr x1, [x1]
+// fn call "+"
 bl fn_4
 add sp, sp, 0
-str x0, [fp, #-112]
+str x0, [fp, #-152]
 ldr x0, =const_4
 ldr x0, [x0]
 cmp x0, #1
@@ -196,32 +234,38 @@ if_1_true:
 b if_1_end
 if_1_false:
 sub sp, sp, 0
-ldr x0, [fp, #-104]
+// fn call "increment" arg "i"
+ldr x0, [fp, #-144]
+// fn call "increment"
 bl fn_21
 add sp, sp, 0
-str x0, [fp, #-104]
+str x0, [fp, #-144]
 b if_1_end
 if_1_end:
 b if_0_end
 if_0_end:
 b while_0_start
 while_0_end:
-ldr x0, [fp, #-96]
-ldr fp, [sp, #96]
-ldr lr, [sp, #104]
-add sp, sp, 112
+ldr x0, [fp, #-136]
+ldr fp, [sp, #160]
+ldr lr, [sp, #168]
+add sp, sp, 176
 ret
 // **
 .global fn_20
 fn_20:
-sub sp, sp, 32
-str lr, [sp, #24]
-str fp, [sp, #16]
-add fp, sp, #16
+sub sp, sp, 48
+str lr, [sp, #40]
+str fp, [sp, #32]
+add fp, sp, #32
+// ** argument a
 str x0, [fp, #-8]
+// ** argument b
 str x1, [fp, #-16]
+// ** variable i
 mov x9, #0
 str x9, [fp, #-24]
+// ** variable res
 mov x9, #0
 str x9, [fp, #-32]
 ldr x0, =const_6
@@ -229,47 +273,60 @@ ldr x0, [x0]
 str x0, [fp, #-32]
 while_1_start:
 sub sp, sp, 0
+// fn call "<" arg "i"
 ldr x0, [fp, #-24]
+// fn call "<" arg "b"
 ldr x1, [fp, #-16]
+// fn call "<"
 bl fn_7
 add sp, sp, 0
 cmp x0, #1
 bne while_1_end
 sub sp, sp, 0
+// fn call "*" arg "res"
 ldr x0, [fp, #-32]
+// fn call "*" arg "a"
 ldr x1, [fp, #-8]
+// fn call "*"
 bl fn_2
 add sp, sp, 0
 str x0, [fp, #-32]
 sub sp, sp, 0
+// fn call "+" arg "i"
 ldr x0, [fp, #-24]
+// fn call "+" arg "1"
 ldr x1, =const_7
 ldr x1, [x1]
+// fn call "+"
 bl fn_4
 add sp, sp, 0
 str x0, [fp, #-24]
 b while_1_start
 while_1_end:
 ldr x0, [fp, #-32]
-ldr fp, [sp, #16]
-ldr lr, [sp, #24]
-add sp, sp, 32
+ldr fp, [sp, #32]
+ldr lr, [sp, #40]
+add sp, sp, 48
 ret
 // increment
 .global fn_21
 fn_21:
-sub sp, sp, 16
-str lr, [sp, #8]
-str fp, [sp, #0]
-add fp, sp, #0
+sub sp, sp, 32
+str lr, [sp, #24]
+str fp, [sp, #16]
+add fp, sp, #16
+// increment argument val
 str x0, [fp, #-8]
 sub sp, sp, 0
+// fn call "+" arg "val"
 ldr x0, [fp, #-8]
+// fn call "+" arg "1"
 ldr x1, =const_8
 ldr x1, [x1]
+// fn call "+"
 bl fn_4
 add sp, sp, 0
-ldr fp, [sp, #0]
-ldr lr, [sp, #8]
-add sp, sp, 16
+ldr fp, [sp, #16]
+ldr lr, [sp, #24]
+add sp, sp, 32
 ret
