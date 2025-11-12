@@ -8,15 +8,11 @@ const_2: .dword 1
 .align 8
 const_3: .dword 1
 .align 8
-const_4: .dword 0
+const_4: .dword 1
 .align 8
-const_5: .dword 0
+const_5: .dword 1
 .align 8
 const_6: .dword 1
-.align 8
-const_7: .dword 1
-.align 8
-const_8: .dword 1
 .text
 // ==
 .global fn_0
@@ -219,20 +215,6 @@ ldr x1, [x1]
 bl fn_4
 add sp, sp, 0
 str x0, [fp, #-152]
-ldr x0, =const_4
-ldr x0, [x0]
-cmp x0, #1
-bne if_0_false
-if_0_true:
-b if_0_end
-if_0_false:
-ldr x0, =const_5
-ldr x0, [x0]
-cmp x0, #1
-bne if_1_false
-if_1_true:
-b if_1_end
-if_1_false:
 sub sp, sp, 0
 // fn call "increment" arg "i"
 ldr x0, [fp, #-144]
@@ -240,10 +222,6 @@ ldr x0, [fp, #-144]
 bl fn_21
 add sp, sp, 0
 str x0, [fp, #-144]
-b if_1_end
-if_1_end:
-b if_0_end
-if_0_end:
 b while_0_start
 while_0_end:
 ldr x0, [fp, #-136]
@@ -268,7 +246,7 @@ str x9, [fp, #-24]
 // ** variable res
 mov x9, #0
 str x9, [fp, #-32]
-ldr x0, =const_6
+ldr x0, =const_4
 ldr x0, [x0]
 str x0, [fp, #-32]
 while_1_start:
@@ -295,7 +273,7 @@ sub sp, sp, 0
 // fn call "+" arg "i"
 ldr x0, [fp, #-24]
 // fn call "+" arg "1"
-ldr x1, =const_7
+ldr x1, =const_5
 ldr x1, [x1]
 // fn call "+"
 bl fn_4
@@ -321,7 +299,7 @@ sub sp, sp, 0
 // fn call "+" arg "val"
 ldr x0, [fp, #-8]
 // fn call "+" arg "1"
-ldr x1, =const_8
+ldr x1, =const_6
 ldr x1, [x1]
 // fn call "+"
 bl fn_4

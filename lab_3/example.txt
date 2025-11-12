@@ -5,14 +5,7 @@
     (while (< i num) (
         (set prod (* prod acc))
         (set acc (+ acc 1))
-        (if false (
-            
-        ) (
-            (if false (
-            ) (
-                (set i (increment i))
-            ))
-        ))
+        (set i (increment i))
     ))
     (return prod)
 ))
