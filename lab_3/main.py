@@ -641,17 +641,8 @@ def ir_fn_defs_build(syn_fn_defs: typing.Iterable[SyntaxFunctionDefinition]):
     )
     return fn_defs
 
-class AsmRegType(enum.StrEnum):
-    X = 'x'
-    D = 'd'
-
-class AsmRegArg[T: (IrFnArg, IrFnCallArg)](typing.NamedTuple):
-    arg: T
-    reg_type: AsmRegType
-    reg_index: int
-
 @contextlib.contextmanager
-def asm_stack_frame(fn_decl: IrFnDecl):
+def asm_stack_frame(fn_decl: IrFnDecl) -> typing.Iterator[typing.Mapping[IrFnArg, int]]:
     with contextlib.ExitStack() as exit_stack:
         exit_stack.callback(print, 'ret')
         
@@ -671,12 +662,11 @@ def asm_stack_frame(fn_decl: IrFnDecl):
         int_var_count = 0
         float_var_count = 0
         stack_var_count = 0
+        fp_offset = 0
         if arg_var_len % 2 == 1:
             fp_offset = 8
             print('mov x9, #0')
             print(f'str x9, [fp, #-{fp_offset}]')
-        else:
-            fp_offset = 0
 
         def _add_new_arg(arg: IrFnArg):
             nonlocal fp_offset
@@ -702,12 +692,22 @@ def asm_stack_frame(fn_decl: IrFnDecl):
                         print(f'str d9, [fp, #-{fp_offset}]')
                         stack_var_count += 1
                     float_var_count += 1
+
         for arg in fn_decl.variables:
             _add_new_arg(arg)
             print('mov x9, #0')
             print(f'str x9, [fp, #-{fp_offset}]')
 
         yield arg_off
+
+class AsmRegType(enum.StrEnum):
+    X = 'x'
+    D = 'd'
+
+class AsmRegArg(typing.NamedTuple):
+    arg: IrFnCallArg
+    reg_type: AsmRegType
+    reg_index: int
 
 def asm_reg_type(arg: IrFnCallArg) -> AsmRegType:
     if isinstance(arg, IrFnArg):
@@ -729,35 +729,32 @@ def asm_fn_call(
 ):
     int_var_count = 0
     float_var_count = 0
-    reg_args: list[IrFnCallArg] = []
+    reg_args: list[AsmRegArg] = []
     stack_args: list[IrFnCallArg] = []
 
     for arg in fn_call.arguments:
-        match asm_reg_type(arg):
+        reg = asm_reg_type(arg)
+        match reg:
             case AsmRegType.X:
                 if int_var_count < 8:
-                    reg_args.append(arg)
+                    reg_args.append(AsmRegArg(arg, reg, int_var_count))
                 else:
                     stack_args.append(arg)
                 int_var_count += 1
             case AsmRegType.D:
                 if float_var_count < 8:
-                    reg_args.append(arg)
+                    reg_args.append(AsmRegArg(arg, reg, float_var_count))
                 else:
                     stack_args.append(arg)
                 float_var_count += 1
 
-    sp_offset = 16 + len(stack_args) 
+    sp_offset = len(stack_args) * 8 
     if len(stack_args) % 2 != 0:
         sp_offset += 8
     
     with contextlib.ExitStack() as exit_stack:
-        fp_offset = sp_offset - 16
         print(f'sub sp, sp, {sp_offset}')
         exit_stack.callback(print, f'add sp, sp, {sp_offset}')
-        print(f'stp fp, sp, [sp, #{fp_offset}]')
-        exit_stack.callback(print, f'ldp fp, sp, [sp, #{fp_offset}]')
-        print(f'add fp, sp, #{fp_offset}')
 
         if len(stack_args) % 2 != 0:
             print('stur wzr, [fp, #-8]')
@@ -772,68 +769,13 @@ def asm_fn_call(
                 print(f'ldr {reg}9, [{reg}9]')
             print(f'str {reg}9, [sp, #{i * 8}]')
 
-        int_var_count = 0
-        float_var_count = 0
-        for i, arg in enumerate(reg_args):
-            reg = asm_reg_type(arg)
-            if isinstance(arg, IrFnArg):
-                print(f'ldr {reg}{i}, [fp, #-{arg_off[arg]}]')
+        for arg in reg_args:
+            if isinstance(arg.arg, IrFnArg):
+                print(f'ldr {arg.reg_type}{arg.reg_index}, [fp, #-{arg_off[arg.arg]}]')
             else:
-                print(f'ldr {reg}, ={const_table[arg]}')
-                print(f'ldr {reg}9, [{reg}9]')
-            print(f'str {reg}9, [sp, #{i * 8}]')
+                print(f'ldr {arg.reg_type}{arg.reg_index}, ={const_table[arg.arg]}')
+                print(f'ldr {arg.reg_type}{arg.reg_index}, [{arg.reg_type}{arg.reg_index}]')
 
-
-    for arg in fn_call.arguments:
-        if isinstance(arg, IrFnArg):
-            match arg.type_:
-                case VarType.BOOL | VarType.INT:
-                    if int_var_count < 8:
-                        print(f'ldr x{int_var_count}, [fp, #-{arg_off[arg]}]')
-                    else:
-                        stack_args.append(arg)
-                    int_var_count += 1
-                case VarType.FLOAT:
-                    if float_var_count < 8:
-                        print(f'ldr d{float_var_count}, [fp, #-{arg_off[arg]}]')
-                    else:
-                        stack_args.append(arg)
-                    float_var_count += 1
-        elif isinstance(arg, ConstantBool | ConstantInt):
-            if int_var_count < 8:
-                print(f'ldr x{int_var_count}, ={const_table[arg]}')
-                print(f'ldr x{int_var_count}, [x{int_var_count}]')
-            else:
-                stack_args.append(arg)
-            int_var_count += 1
-        else:
-            if float_var_count < 8:
-                print(f'ldr x{float_var_count}, ={const_table[arg]}')
-                print(f'ldr d{float_var_count}, [x{float_var_count}]')
-            else:
-                stack_args.append(arg)
-            float_var_count += 1
-    with contextlib.ExitStack() as exit_stack:
-        stack_args.reverse()
-        for arg in stack_args:
-            print('sub sp, sp, #8')
-            exit_stack.callback(print, 'add sp, sp, #8')
-            if isinstance(arg, IrFnArg):
-                match arg.type_:
-                    case VarType.BOOL | VarType.INT:
-                        print(f'ldr x9, [fp, #-{arg_off[arg]}]')
-                        print('str x9, [sp]')
-                    case VarType.FLOAT:
-                        print(f'ldr d9, [fp, #-{arg_off[arg]}]')
-                        print('str d9, [sp]')
-            elif isinstance(arg, ConstantBool | ConstantInt):
-                print(f'ldr x9, ={const_table[arg]}')
-                print(f'ldr x9, [x9]')
-                print('str x9, [sp]')
-            else:
-                print(f'ldr x9, ={const_table[arg]}')
-                print(f'ldr d9, [x9]')
-                print('str d9, [sp]')
         print(f'bl {fn_name_table[fn_call.fn]}') 
 
 def ir_collect_stmt[T: IrStmt](l: list[T], cls: type[T], stmt_list: typing.Iterable[IrStmt]):
@@ -855,30 +797,22 @@ def asm_stmt_src(
     fn_name_table: typing.Mapping[IrFnDecl | BuiltinFunction, str],
     arg_off: typing.Mapping[IrFnArg, int],
     const_table: typing.Mapping[Constant, str]
-):
+) -> AsmRegType:
     if isinstance(src, IrFnArg):
-        match src.type_:
-            case VarType.BOOL | VarType.INT:
-                reg = 'x'
-            case VarType.FLOAT:
-                reg = 'd'
+        reg = asm_reg_type(src)
         print(f'ldr {reg}0, [fp, #-{arg_off[src]}]')
     elif isinstance(src, Constant):
-        if isinstance(src, ConstantBool | ConstantInt):
-            reg = 'x'
-        else:
-            reg = 'd'
+        reg = asm_reg_type(src)
         print(f'ldr x0, ={const_table[src]}')
         print(f'ldr {reg}0, [x0]')
     else:
         asm_fn_call(src, fn_name_table, arg_off, const_table)
         match src.fn.return_type:
             case VarType.BOOL | VarType.INT:
-                reg = 'x'
+                reg = AsmRegType.X
             case VarType.FLOAT:
-                reg = 'd'
+                reg = AsmRegType.D
     return reg
-
 
 def asm_cond(
     cond: IrStmtArg,
@@ -934,7 +868,6 @@ def asm_statement_list(
         else:
             _ = asm_stmt_src(stmt.val, fn_name_table, arg_off, const_table)
 
-
 def asm_generate(ir_fn_defs: typing.Iterable[IrFnDef], constants: typing.Iterable[Constant]):
     fn_name_table = dict((fn, f'fn_{i}') for i, fn in enumerate(itertools.chain(BULTIN_FUNCTIONS, (fn.decl for fn in ir_fn_defs))))
     const_table = dict((const, f'const_{i}') for i, const in enumerate(constants))
@@ -969,6 +902,7 @@ def asm_generate(ir_fn_defs: typing.Iterable[IrFnDef], constants: typing.Iterabl
         print(f'// {fn_def.decl.name}')
         print(f'.global {fn_name_table[fn_def.decl]}')
         print(f'{fn_name_table[fn_def.decl]}:')
+        with asm_stack_frame(fn_def.decl) as arg_off:
             asm_statement_list(fn_def.body, fn_name_table, arg_off, const_table, if_table, while_table)
         
 def main():
