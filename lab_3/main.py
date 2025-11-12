@@ -651,12 +651,12 @@ def asm_stack_frame(fn_decl: IrFnDecl) -> typing.Iterator[typing.Mapping[IrFnArg
             arg_var_len += 1
 
         sp_offset = arg_var_len * 8
-        fp_sp_offset = sp_offset - 16
         print(f'sub sp, sp, {sp_offset}')
         exit_stack.callback(print, f'add sp, sp, {sp_offset}')
-        print(f'stp fp, sp, [sp, #{fp_sp_offset}]')
-        exit_stack.callback(print, f'ldp fp, sp, [sp, #{fp_sp_offset}]')
-        print(f'add fp, sp, #{fp_sp_offset}')
+        for reg, off in (('lr', sp_offset - 8), ('fp', sp_offset - 16)):
+            print(f'str {reg}, [sp, #{off}]')
+            exit_stack.callback(print, f'ldr {reg}, [sp, #{off}]')
+        print(f'add fp, sp, #{sp_offset - 16}')
 
         arg_off: dict[IrFnArg, int] = dict()
         int_var_count = 0
